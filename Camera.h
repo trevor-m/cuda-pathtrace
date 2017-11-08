@@ -117,8 +117,30 @@ public:
 			this->Zoom = 45.0f;
 	}
 
-	void getEyeRay(int x, int y) {
+	void getEyeRayBasis(float3* output, int w, int h) {
+		// get ray basis from camera
+		glm::mat4 view;
+		view = GetViewMatrix();
+		glm::mat4 projection;
+		projection = glm::perspective(glm::radians(45.0f), w / (float)h, 0.01f, 1000.0f);
+		glm::mat4 invViewProj = glm::inverse(projection * view);
+		glm::vec4 ray00 = invViewProj * glm::vec4(-1, -1, 0, 1);
+		ray00 /= ray00.w;
+		ray00 -= glm::vec4(Position, 0.0f);
+		glm::vec4 ray10 = invViewProj * glm::vec4(+1, -1, 0, 1);
+		ray10 /= ray10.w;
+		ray10 -= glm::vec4(Position, 0.0f);
+		glm::vec4 ray01 = invViewProj * glm::vec4(-1, +1, 0, 1);
+		ray01 /= ray01.w;
+		ray01 -= glm::vec4(Position, 0.0f);
+		glm::vec4 ray11 = invViewProj * glm::vec4(+1, +1, 0, 1);
+		ray11 /= ray11.w;
+		ray11 -= glm::vec4(Position, 0.0f);
 
+		output[0] = make_float3(ray00.x, ray00.y, ray00.z);
+		output[1] = make_float3(ray10.x, ray10.y, ray10.z);
+		output[2] = make_float3(ray01.x, ray01.y, ray01.z);
+		output[3] = make_float3(ray11.x, ray11.y, ray11.z);
 	}
 
 private:

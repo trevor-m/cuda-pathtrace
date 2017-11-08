@@ -1,25 +1,41 @@
+#include "Camera.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
-#include <cutil_math.h>
+#include <helper_math.h>
+#include <math_constants.h>
 #include <curand.h>
 #include <curand_kernel.h>
+#include <iostream>
 
 // Dimensions
-#define SCREEN_W 1024
-#define SCREEN_H 1024
+#define SCREEN_W 512
+#define SCREEN_H 512
 #define NUM_CHANNELS 3
 
 // Renderer constants
+#define SAMPLES 4096
 #define MAX_BOUNCES 10
 #define PUSH_RAY_ORIGIN 0.05f
 
+#include <helper_cuda.h>
+
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+   if (code != cudaSuccess) 
+   {
+      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+      if (abort) exit(code);
+   }
+}
+
 struct Sphere {
-  float3 pos;
   float radius;
+  float3 pos;
   
   // Material
-  float3 color;
   float3 emission;
-  
+  float3 color;
 };
 
 struct Scene {
@@ -30,7 +46,7 @@ struct Scene {
 struct HitData {
   float t;
   // index of object hit
-  float index;
+  int index;
 };
 
 struct Ray {
@@ -38,7 +54,7 @@ struct Ray {
   float3 direction;
 };
 
-__device__ bool intersectSphere(Ray* ray, Sphere* sphere, float* t) {
+__device__ bool intersectSphere(const Ray& ray, const Sphere& sphere, float* t) {
 	float3 offset = ray.origin - sphere.pos;
 	float a = dot(ray.direction, ray.direction);
 	float b = 2.0 * dot(ray.direction, offset);
@@ -59,13 +75,13 @@ __device__ bool intersectSphere(Ray* ray, Sphere* sphere, float* t) {
 	return false;
 }
 
-__device__ bool intersectScene(Scene* scene, Ray* ray, Hitdata* hitData) {
+__device__ bool intersectScene(const Scene& scene, const Ray& ray, HitData* hitData) {
   float tNearest = 1000000.0f;
 	float t = 0;
 	bool hit = false;
-	for (int i = 0; i < scene->numObjects; i++) {
+	for (int i = 0; i < scene.numObjects; i++) {
 		//if there was an intersection and it is the closest
-		if (intersectSphere(ray, &scene->objects[i], t) && t > 0 && t < tNearest) {
+		if (intersectSphere(ray, scene.objects[i], &t) && t > 0 && t < tNearest) {
 			tNearest = t;
 			hit = true;
 			hitData->t = t;
@@ -75,65 +91,72 @@ __device__ bool intersectScene(Scene* scene, Ray* ray, Hitdata* hitData) {
 	return hit;
 }
 
-__device__ float3 getCosineWeightedNormal(float3 dir, curandState_t* randState) {
+__device__ float3 orthoVector(float3 v) {
+    //  See : http://lolengine.net/blog/2013/09/21/picking-orthogonal-vector-combing-coconuts
+    return (abs(v.x) > abs(v.z)) ? make_float3(-v.y, v.x, 0.0f)  : make_float3(0.0f, -v.z, v.y);
+}
+
+__device__ float3 getCosineWeightedNormal(float3 dir, curandState* randState) {
   float power = 1.0f; //0 for unbiased
-  dir = norm3df(dir);
-	float3 o1 = norm3f(ortho(dir));
+  dir = normalize(dir);
+	float3 o1 = normalize(orthoVector(dir));
 	float3 o2 = normalize(cross(dir, o1));
-	float2 r = curand2(randState);
-	r.x = r.x * 2.0f * PI;
+	float2 r = make_float2(curand_uniform(randState), curand_uniform(randState));
+	r.x = r.x * 2.0f * CUDART_PI_F;
 	r.y = pow(r.y, 1.0f / (power + 1.0f));
 	float oneminus = sqrt(1.0 - r.y * r.y);
 	return cos(r.x) * oneminus * o1 + sin(r.x) * oneminus * o2 + r.y * dir;
 }
 
-__device__ void trace_ray(Scene* scene, Ray* ray, curandState_t* randState) {
+__device__ float3 trace_ray(const Scene& scene, Ray ray, curandState* randState) {
   HitData hitData;
-  float3 color = float3(0,0,0);
-  float3 mask = float3(1,1,1);
+  float3 color = make_float3(0,0,0);
+  float3 mask = make_float3(1,1,1);
   
   for (int n = 0; n < MAX_BOUNCES; n++) {
     // ray leaves the scene
-    if (!intersectScene(ray, &hitData))
+    if (!intersectScene(scene, ray, &hitData))
       return color;
     
-    // accumulate color
-    color += mask * scene->objects[hitData.index].emission;
+    // accumulate emmission
+    color += mask * scene.objects[hitData.index].emission;
+    // attenuate color for next bounce
+    mask *= scene.objects[hitData.index].color; //account for incoming direction??
+
     // bounce off surface
-    float3 pos = ray->origin + ray->direction * hitData.t;
-    float3 normal = norm3df(pos - scene->objects[hitData.index].pos);
+    float3 pos = ray.origin + ray.direction * hitData.t;
+    float3 normal = normalize(pos - scene.objects[hitData.index].pos);
     // flip normal if necessary
     normal = dot(normal, ray.direction) < 0 ? normal : -1 * normal;
     // create next ray
-    ray->origin = pos + normal * PUSH_RAY_ORIGIN;
-    ray->direction = norm3df(getCosineWeightedNormal(normal, randState));
-    
-    // attenuate color
-    mask *= scene->objects[hitData.index].color;
+    ray.origin = pos + normal * PUSH_RAY_ORIGIN;
+    ray.direction = normalize(getCosineWeightedNormal(normal, randState));
   }
   return color;
 }
 
-__global__ void pixel_kernel(float* output, int w, int h, int spp, Scene* scene, curandState_t* randStates) {
+__global__ void pixel_kernel(float* output, curandState* randStates, Scene scene, float3* rayBasis, float3* eyePos, int spp) {
   int x = blockIdx.x * blockDim.x + threadIdx.x;
   int y = blockIdx.y * blockDim.y + threadIdx.y;
   int id = x * SCREEN_W + y;
-  
-  if (x >= w || y >= h)
+
+  if (x >= SCREEN_W || y >= SCREEN_H)
     return;
   
   //copy random state to local memory
-  curandState_t localRandState = randStates[id];
+  curandState localRandState = randStates[id];
   
-  // trace ray for each sample
-  float3 color;
-  color.x = x/(float)SCREEN_W;
-  color.y = y/(float)SCREEN_H;
-  color.z = 1.0f;
+  // take samples
+  float3 color = make_float3(0.0f, 0.0f, 0.0f);
   for (int i = 0; i < spp; i++) {
-    // Create ray
+    // determine ray direction by interpolating from basis
+    float2 screenPos = make_float2(x + curand_uniform(&localRandState)*2.0f - 1.0f, y + curand_uniform(&localRandState)*2.0f - 1.0f);
+    screenPos /= make_float2(SCREEN_W, SCREEN_H);
     Ray ray;
-    color += trace_ray(scene, &ray, &localRandState);
+    ray.origin = *eyePos;
+    ray.direction = lerp(lerp(rayBasis[0], rayBasis[1], screenPos.y), lerp(rayBasis[2], rayBasis[3], screenPos.y), 1.0f-screenPos.x);
+    // trace ray and accumulate color
+    color += trace_ray(scene, ray, &localRandState);
   }
   color /= (float)spp;
   
@@ -145,50 +168,95 @@ __global__ void pixel_kernel(float* output, int w, int h, int spp, Scene* scene,
   randStates[id] = localRandState;
 }
 
-__global__ void setup_random(curandState_t* states) {
+__global__ void setup_random(curandState* states) {
   int x = blockIdx.x * blockDim.x + threadIdx.x;
   int y = blockIdx.y * blockDim.y + threadIdx.y;
   int id = x * SCREEN_W + y;
-  curand_init(0, id, 0, &state[id]);
+  if (x >= SCREEN_W || y >= SCREEN_H)
+    return;
+  curand_init(id, 0, 0, &states[id]);
 }
 
 
 int main(int argc, char** argv) {
+  // determine how to distribute work to GPU
+  int blockSize = 32;
+  int bx = (SCREEN_W + blockSize - 1)/blockSize;
+  int by = (SCREEN_H + blockSize - 1)/blockSize;
+  dim3 gridSize = dim3(bx, by);
+  dim3 dimBlock = dim3(blockSize, blockSize);
+
+  std::cout << gridSize.x << ", " << gridSize.y << std::endl;
+
+  gpuErrchk(cudaSetDevice(1));
+  
+  // random number generator states: 1 for each pixel/thread
+  curandState* d_states;
+  int numCurandStates = SCREEN_W*SCREEN_H;
+  gpuErrchk(cudaMalloc(&d_states, numCurandStates * sizeof(curandState)));
+  setup_random<<<gridSize, dimBlock>>>(d_states);
+  
+  // create scene
+  Scene d_scene;
+  d_scene.numObjects = 9;
+  Sphere spheres[] = {
+   { 1e5f, { 1e5f + 1.0f, 40.8f, 81.6f }, { 0.0f, 0.0f, 0.0f }, { 0.75f, 0.25f, 0.25f } }, //Left 
+   { 1e5f, { -1e5f + 99.0f, 40.8f, 81.6f }, { 0.0f, 0.0f, 0.0f }, { .25f, .25f, .75f } }, //Right 
+   { 1e5f, { 50.0f, 40.8f, 1e5f }, { 0.0f, 0.0f, 0.0f }, { .75f, .75f, .75f } }, //Back 
+   { 1e5f, { 50.0f, 40.8f, -1e5f + 600.0f }, { 0.0f, 0.0f, 0.0f }, { 1.00f, 1.00f, 1.00f } }, //Frnt 
+   { 1e5f, { 50.0f, 1e5f, 81.6f }, { 0.0f, 0.0f, 0.0f }, { .75f, .75f, .75f } }, //Botm 
+   { 1e5f, { 50.0f, -1e5f + 81.6f, 81.6f }, { 0.0f, 0.0f, 0.0f }, { .75f, .75f, .75f } }, //Top 
+   { 16.5f, { 27.0f, 16.5f, 47.0f }, { 0.0f, 0.0f, 0.0f }, { 1.0f, 1.0f, 1.0f } }, // small sphere 1
+   { 16.5f, { 73.0f, 16.5f, 78.0f }, { 0.0f, 0.0f, 0.0f }, { 1.0f, 1.0f, 1.0f } }, // small sphere 2
+   { 600.0f, { 50.0f, 681.6f - .77f, 81.6f }, { 2.0f, 1.8f, 1.6f }, { 0.0f, 0.0f, 0.0f } }  // Light
+  };
+  gpuErrchk(cudaMalloc(&d_scene.objects, d_scene.numObjects*sizeof(Sphere)));
+  gpuErrchk(cudaMemcpy(d_scene.objects, spheres, d_scene.numObjects*sizeof(Sphere), cudaMemcpyHostToDevice));
+
+  // create camera and compute eye ray basis
+  Camera camera(glm::vec3(50, 52, 295.6));
+  float3 eyeRayBasis[4];
+  camera.getEyeRayBasis(eyeRayBasis, SCREEN_W, SCREEN_H);
+  float3* d_eyeRayBasis;
+  gpuErrchk(cudaMalloc(&d_eyeRayBasis, 4*sizeof(float3)));
+  gpuErrchk(cudaMemcpy(d_eyeRayBasis, eyeRayBasis, 4*sizeof(float3), cudaMemcpyHostToDevice));
+  float3* d_eyePos;
+  gpuErrchk(cudaMalloc(&d_eyePos, sizeof(float3)));
+  gpuErrchk(cudaMemcpy(d_eyePos, &camera.Position, sizeof(float3), cudaMemcpyHostToDevice));
+  
   // allocate output buffer on host and device
   float* screenBuffer = new float[SCREEN_W*SCREEN_H*NUM_CHANNELS];
   float* d_screenBuffer;
-  cudaMalloc(&d_screenBuffer, SCREEN_W*SCREEN_H*NUM_CHANNELS*sizeof(float));
-  
-  // determine how to distribute work to GPU
-  int bx = (SCREEN_W + blockSize.x - 1)/blockSize.x;
-  int by = (SCREEN_H + blockSize.y – 1)/blockSize.y;
-  dim3 gridSize = dim3(bx, by);
-  
-  // random number generator states: 1 for each pixel/thread
-  curandState_t* d_states;
-  int numCurandStates = (bx * blockSize.x) * (by * blockSize.y);
-  cudaMalloc(&d_states, numCurandStates * sizeof(curandState_t));
-  setup_random<<<gridSize, blockSize>>>(d_states);
-  
-  // create scene
-  Scene scene;
-  scene.numObjects = 0;
-  scene.objects = new 
-  
+  gpuErrchk(cudaMalloc(&d_screenBuffer, SCREEN_W*SCREEN_H*NUM_CHANNELS*sizeof(float)));
+
+  //measure how long kernel takes
+  cudaEvent_t start, stop;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+
   // run kernel
-  pixel_kernel<<<gridSize, blockSize>>>(screenBuffer, SCREEN_W, SCREEN_H, 1, d_scene);
-  
+  cudaEventRecord(start);
+  pixel_kernel<<<gridSize, dimBlock>>>(d_screenBuffer, d_states, d_scene, d_eyeRayBasis, d_eyePos, SAMPLES);
+  cudaEventRecord(stop);
+
   // copy output buffer back to host
-  cudaMemcpy(screenBuffer, d_screenBuffer, SCREEN_W*SCREEN_H*NUM_CHANNELS*sizeof(float), cudaMemcpyDeviceToHost);
-  
+  gpuErrchk(cudaMemcpy(screenBuffer, d_screenBuffer, SCREEN_W*SCREEN_H*NUM_CHANNELS*sizeof(float), cudaMemcpyDeviceToHost));
+
   // save bitmap
   unsigned char* outBuffer = new unsigned char[SCREEN_W*SCREEN_H*3];
   for (int i = 0; i < SCREEN_W*SCREEN_H*3; i++)
-    outBuffer = (unsigned char)fminf(0.0f, fmaxf(255.0f, (255.0f * screenBuffer)));
+    outBuffer[i] = (unsigned char)min(255, max(0, (int)(255.0f * screenBuffer[i])));
+
   stbi_write_bmp("output.bmp", SCREEN_W, SCREEN_H, 3, outBuffer);
+  delete[] outBuffer;
   
+  cudaEventSynchronize(stop);
+  float milliseconds = 0;
+  cudaEventElapsedTime(&milliseconds, start, stop);
+  printf("Kernel took %fms (%f fps)\n", milliseconds, 1000.0f/milliseconds);
+
   // clean up
   cudaFree(d_screenBuffer);
-  delete[] d_screenBuffer;
+  delete[] screenBuffer;
   return 0;
 }
