@@ -69,6 +69,21 @@ struct OutputBuffer {
 enum Features {COLOR=0, NORMAL=1, ALBEDO=2, DEPTH=3, NUM_FEATURES=4};
 
 // Output of a single ray trace
+struct TraceOutput {
+  float3 color;
+  float3 normal;
+  float3 albedo;
+  float depth;
+
+  __device__ TraceOutput() {
+    color = make_float3(0.0f, 0.0f, 0.0f);
+    normal = make_float3(0.0f, 0.0f, 0.0f);
+    albedo = make_float3(0.0f, 0.0f, 0.0f);
+    depth = 0.0f;
+  }
+};
+
+// Compute variance for features
 struct OnlineVarianceBuffer {
   int n[NUM_FEATURES];
   float mean[NUM_FEATURES];
@@ -92,7 +107,7 @@ struct OnlineVarianceBuffer {
 
   __device__ float getVariance(Features feature) {
     if(n[feature] < 2)
-      return 0.5f;
+      return 0.0f;
     return (M2[feature] / (n[feature]-1));
   }
 };
@@ -169,15 +184,17 @@ __device__ float3 getCosineWeightedNormal(float3 dir, curandState* randState) {
 	return cos(r.x) * oneminus * o1 + sin(r.x) * oneminus * o2 + r.y * dir;
 }
 
-__device__ float3 trace_ray(OutputBuffer output, const Scene& scene, Ray ray, curandState* randState, int x, int y, OnlineVarianceBuffer& var) {
+__device__ void trace_ray(TraceOutput& L, const Scene& scene, Ray ray, curandState* randState, int x, int y, OnlineVarianceBuffer& var) {
   HitData hitData;
   float3 color = make_float3(0,0,0);
   float3 mask = make_float3(1,1,1);
   
   for (int n = 0; n < MAX_BOUNCES; n++) {
     // ray leaves the scene
-    if (!intersectScene(scene, ray, &hitData))
-      return color;
+    if (!intersectScene(scene, ray, &hitData)) {
+      L.color += color;
+      return;
+    }
     
     // accumulate emmission
     color += mask * scene.objects[hitData.index].emission;
@@ -195,13 +212,9 @@ __device__ float3 trace_ray(OutputBuffer output, const Scene& scene, Ray ray, cu
 
     // record first bounce information
     if(n == 0) {
-      output.normal[x*SCREEN_W*3 + y*3 + 0] = normal.x;
-      output.normal[x*SCREEN_W*3 + y*3 + 1] = normal.y;
-      output.normal[x*SCREEN_W*3 + y*3 + 2] = normal.z;
-      output.albedo[x*SCREEN_W*3 + y*3 + 0] = scene.objects[hitData.index].color.x;
-      output.albedo[x*SCREEN_W*3 + y*3 + 1] = scene.objects[hitData.index].color.y;
-      output.albedo[x*SCREEN_W*3 + y*3 + 2] = scene.objects[hitData.index].color.z;
-      output.depth[x*SCREEN_W + y] = hitData.t;
+      L.normal += normal;
+      L.albedo += scene.objects[hitData.index].color;
+      L.depth += hitData.t;
       // update variances
       var.updateVariance(luminance(normal), Features::NORMAL);
       var.updateVariance(luminance(scene.objects[hitData.index].color), Features::ALBEDO);
@@ -209,9 +222,9 @@ __device__ float3 trace_ray(OutputBuffer output, const Scene& scene, Ray ray, cu
     }
   }
 
+  L.color += color;
   // update color variance with final sample color
   var.updateVariance(luminance(color), Features::COLOR);
-  return color;
 }
 
 __global__ void pixel_kernel(OutputBuffer output, curandState* randStates, Scene scene, float3* rayBasis, float3* eyePos, int spp) {
@@ -228,6 +241,7 @@ __global__ void pixel_kernel(OutputBuffer output, curandState* randStates, Scene
   // take samples
   float3 color = make_float3(0.0f, 0.0f, 0.0f);
   OnlineVarianceBuffer var;
+  TraceOutput L;
 
   for (int i = 0; i < spp; i++) {
     // determine ray direction by interpolating from basis
@@ -237,14 +251,25 @@ __global__ void pixel_kernel(OutputBuffer output, curandState* randStates, Scene
     ray.origin = *eyePos;
     ray.direction = lerp(lerp(rayBasis[0], rayBasis[1], screenPos.y), lerp(rayBasis[2], rayBasis[3], screenPos.y), 1.0f-screenPos.x);
     // trace ray and accumulate color
-    color += trace_ray(output, scene, ray, &localRandState, x, y, var);
+    trace_ray(L, scene, ray, &localRandState, x, y, var);
   }
-  color /= (float)spp;
+  // average over all samples
+  L.color /= (float)spp;
+  L.normal /= (float)spp;
+  L.albedo /= (float)spp;
+  L.depth /= (float)spp;
   
   // write to output buffer
-  output.color[x*SCREEN_W*3 + y*3 + 0] = color.x;
-  output.color[x*SCREEN_W*3 + y*3 + 1] = color.y;
-  output.color[x*SCREEN_W*3 + y*3 + 2] = color.z;
+  output.color[x*SCREEN_W*3 + y*3 + 0] = L.color.x;
+  output.color[x*SCREEN_W*3 + y*3 + 1] = L.color.y;
+  output.color[x*SCREEN_W*3 + y*3 + 2] = L.color.z;
+  output.normal[x*SCREEN_W*3 + y*3 + 0] = L.normal.x;
+  output.normal[x*SCREEN_W*3 + y*3 + 1] = L.normal.y;
+  output.normal[x*SCREEN_W*3 + y*3 + 2] = L.normal.z;
+  output.albedo[x*SCREEN_W*3 + y*3 + 0] = L.albedo.x;
+  output.albedo[x*SCREEN_W*3 + y*3 + 1] = L.albedo.y;
+  output.albedo[x*SCREEN_W*3 + y*3 + 2] = L.albedo.z;
+  output.depth[x*SCREEN_W + y] = L.depth;
   // get final variances
   output.color_var[x*SCREEN_W + y] = var.getVariance(Features::COLOR);
   output.normal_var[x*SCREEN_W + y] = var.getVariance(Features::NORMAL);
@@ -279,7 +304,7 @@ int main(int argc, const char** argv) {
   else if(argc == 4) {
     samplesPerPixel = std::stoi(argv[1]);
     outputName = std::string(argv[2]);
-    samplesPerPixel = std::stoi(argv[3]);
+    cudaDevice = std::stoi(argv[3]);
   }
   else {
     std::cout << "Usage:" << std::endl;
