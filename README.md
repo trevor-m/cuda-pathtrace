@@ -23,7 +23,7 @@ In the future, cuda-pathtrace's renders will be automatically fed through a deep
 You will need the following in order to build the application:
 
 * [NVIDIA CUDA Toolkit 8.0](https://developer.nvidia.com/cuda-downloads)
-* [glm](https://glm.g-truc.net/0.9.8/index.html)
+* [glm](https://glm.g-truc.net/0.9.8/index.html) - Just copy the glm folder to /usr/include
 
 ### Compiling
 
