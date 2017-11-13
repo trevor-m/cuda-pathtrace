@@ -31,10 +31,12 @@ Type `make` to build the application (Tested on Ubuntu 16.04).
 
 ### Usage
 
-Use one of the following to render the scene.
+Use one of the following to render the scene. The output file <outpt name>.exr will be created with the results of your render.
 
 `pathtrace <samples per pixel>`
+
 `pathtrace <samples per pixel> <output name>`
+
 `pathtrace <samples per pixel> <output name> <CUDA device>`
 
 ## Built With
