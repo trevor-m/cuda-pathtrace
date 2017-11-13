@@ -1,6 +1,10 @@
 #pragma once
 // This is from the tutorials at http://www.learnopengl.com/
 
+//CUDA Includes
+#include <vector_types.h>
+#include <vector_functions.h>
+
 // Std. Includes
 #include <vector>
 

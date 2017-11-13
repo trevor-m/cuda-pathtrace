@@ -1,47 +1,11 @@
-#include "Camera.h"
-#include <string>
-#include "tinyexr.h"
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
+#include "pathtrace.h"
 #include <helper_math.h>
-#include <helper_cuda.h>
 #include <math_constants.h>
-#include <curand.h>
-#include <curand_kernel.h>
-#include <iostream>
 
-// Default dimensions
-#define SCREEN_W 512
-#define SCREEN_H 512
-#define SAMPLES 4
 
 // Renderer constants
 #define MAX_BOUNCES 8
 #define PUSH_RAY_ORIGIN 0.05f
-
-#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
-inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
-{
-   if (code != cudaSuccess) 
-   {
-      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
-      if (abort) exit(code);
-   }
-}
-
-struct Sphere {
-  float radius;
-  float3 pos;
-  
-  // Material
-  float3 emission;
-  float3 color;
-};
-
-struct Scene {
-  int numObjects;
-  Sphere* objects;
-};
 
 struct HitData {
   float t;
@@ -52,18 +16,6 @@ struct HitData {
 struct Ray {
   float3 origin;
   float3 direction;
-};
-
-// Full pixel buffer of all channels
-struct OutputBuffer {
-  float* color; // 3 channels
-  float* normal; // 3 channels
-  float* albedo; // 3 channels
-  float* depth; // 1 channel
-  float* color_var; // 1 channel (Luminance)
-  float* normal_var; // 1 channel (Luminance)
-  float* albedo_var; // 1 channel (Luminance)
-  float* depth_var; // 1 channel
 };
 
 enum Features {COLOR=0, NORMAL=1, ALBEDO=2, DEPTH=3, NUM_FEATURES=4};
@@ -116,19 +68,7 @@ __device__ float luminance(float3 color) {
   return 0.2126*color.x + 0.7152*color.y + 0.0722*color.z;
 }
 
-void saveBufferToBMP(std::string filename, float* data, int channels) {
-  unsigned char* outBuffer = new unsigned char[SCREEN_W*SCREEN_H*channels];
-  for (int i = 0; i < SCREEN_W*SCREEN_H*channels; i++)
-    outBuffer[i] = (unsigned char)min(255, max(0, (int)(255.0f * data[i])));
 
-  stbi_write_bmp(filename.c_str(), SCREEN_W, SCREEN_H, channels, outBuffer);
-  delete[] outBuffer;
-}
-
-void saveBuffersToEXR(std::string filename, OutputBuffer& buffer) {
-
-
-}
 
 __device__ bool intersectSphere(const Ray& ray, const Sphere& sphere, float* t) {
 	float3 offset = ray.origin - sphere.pos;
@@ -286,139 +226,4 @@ __global__ void setup_random(curandState* states) {
   if (x >= SCREEN_W || y >= SCREEN_H)
     return;
   curand_init(id, 0, 0, &states[id]);
-}
-
-
-int main(int argc, const char** argv) {
-  //get arguments
-  int samplesPerPixel = SAMPLES;
-  int cudaDevice = 0;
-  std::string outputName = "output";
-  if(argc == 2) {
-    samplesPerPixel = std::stoi(argv[1]);
-  }
-  else if(argc == 3) {
-    samplesPerPixel = std::stoi(argv[1]);
-    outputName = std::string(argv[2]);
-  }
-  else if(argc == 4) {
-    samplesPerPixel = std::stoi(argv[1]);
-    outputName = std::string(argv[2]);
-    cudaDevice = std::stoi(argv[3]);
-  }
-  else {
-    std::cout << "Usage:" << std::endl;
-    std::cout << "\tpathtrace <samples per pixel> <output name>" << std::endl;
-    std::cout << "\tpathtrace <samples per pixel> <output name> <CUDA device>" << std::endl;
-  }
-
-  std::cout << "Output file prefix: " << outputName << std::endl;
-  std::cout << "Samples per pixel: " << samplesPerPixel << std::endl;
-  std::cout << "Using CUDA device: " << cudaDevice << std::endl;
-
-  // determine how to distribute work to GPU
-  int blockSize = 32;
-  int bx = (SCREEN_W + blockSize - 1)/blockSize;
-  int by = (SCREEN_H + blockSize - 1)/blockSize;
-  dim3 gridSize = dim3(bx, by);
-  dim3 dimBlock = dim3(blockSize, blockSize);
-
-  // set cuda device
-  gpuErrchk(cudaSetDevice(cudaDevice));
-  
-  // random number generator states: 1 for each pixel/thread
-  curandState* d_states;
-  int numCurandStates = SCREEN_W*SCREEN_H;
-  gpuErrchk(cudaMalloc(&d_states, numCurandStates * sizeof(curandState)));
-  setup_random<<<gridSize, dimBlock>>>(d_states);
-  
-  // create scene
-  Scene d_scene;
-  d_scene.numObjects = 9;
-  Sphere spheres[] = {
-   { 1e5f, { 1e5f + 1.0f, 40.8f, 81.6f }, { 0.0f, 0.0f, 0.0f }, { 0.75f, 0.25f, 0.25f } }, //Left 
-   { 1e5f, { -1e5f + 99.0f, 40.8f, 81.6f }, { 0.0f, 0.0f, 0.0f }, { .25f, .25f, .75f } }, //Right 
-   { 1e5f, { 50.0f, 40.8f, 1e5f }, { 0.0f, 0.0f, 0.0f }, { .75f, .75f, .75f } }, //Back 
-   { 1e5f, { 50.0f, 40.8f, -1e5f + 600.0f }, { 0.0f, 0.0f, 0.0f }, { 1.00f, 1.00f, 1.00f } }, //Frnt 
-   { 1e5f, { 50.0f, 1e5f, 81.6f }, { 0.0f, 0.0f, 0.0f }, { .75f, .75f, .75f } }, //Botm 
-   { 1e5f, { 50.0f, -1e5f + 81.6f, 81.6f }, { 0.0f, 0.0f, 0.0f }, { .75f, .75f, .75f } }, //Top 
-   { 16.5f, { 27.0f, 16.5f, 47.0f }, { 0.0f, 0.0f, 0.0f }, { 1.0f, 1.0f, 1.0f } }, // small sphere 1
-   { 16.5f, { 73.0f, 16.5f, 78.0f }, { 0.0f, 0.0f, 0.0f }, { 1.0f, 1.0f, 1.0f } }, // small sphere 2
-   { 600.0f, { 50.0f, 681.6f - .78f, 81.6f }, { 2.0f, 1.8f, 1.6f }, { 0.0f, 0.0f, 0.0f } }  // Light y=-/77 originally
-  };
-  gpuErrchk(cudaMalloc(&d_scene.objects, d_scene.numObjects*sizeof(Sphere)));
-  gpuErrchk(cudaMemcpy(d_scene.objects, spheres, d_scene.numObjects*sizeof(Sphere), cudaMemcpyHostToDevice));
-
-  // create camera and compute eye ray basis
-  Camera camera(glm::vec3(50, 52, 295.6));
-  float3 eyeRayBasis[4];
-  camera.getEyeRayBasis(eyeRayBasis, SCREEN_W, SCREEN_H);
-  float3* d_eyeRayBasis;
-  gpuErrchk(cudaMalloc(&d_eyeRayBasis, 4*sizeof(float3)));
-  gpuErrchk(cudaMemcpy(d_eyeRayBasis, eyeRayBasis, 4*sizeof(float3), cudaMemcpyHostToDevice));
-  float3* d_eyePos;
-  gpuErrchk(cudaMalloc(&d_eyePos, sizeof(float3)));
-  gpuErrchk(cudaMemcpy(d_eyePos, &camera.Position, sizeof(float3), cudaMemcpyHostToDevice));
-  
-  // allocate output buffer on device
-  OutputBuffer d_buffer;
-  gpuErrchk(cudaMalloc(&d_buffer.color, SCREEN_W*SCREEN_H*3*sizeof(float)));
-  gpuErrchk(cudaMalloc(&d_buffer.normal, SCREEN_W*SCREEN_H*3*sizeof(float)));
-  gpuErrchk(cudaMalloc(&d_buffer.albedo, SCREEN_W*SCREEN_H*3*sizeof(float)));
-  gpuErrchk(cudaMalloc(&d_buffer.depth, SCREEN_W*SCREEN_H*1*sizeof(float)));
-  gpuErrchk(cudaMalloc(&d_buffer.color_var, SCREEN_W*SCREEN_H*1*sizeof(float)));
-  gpuErrchk(cudaMalloc(&d_buffer.normal_var, SCREEN_W*SCREEN_H*1*sizeof(float)));
-  gpuErrchk(cudaMalloc(&d_buffer.albedo_var, SCREEN_W*SCREEN_H*1*sizeof(float)));
-  gpuErrchk(cudaMalloc(&d_buffer.depth_var, SCREEN_W*SCREEN_H*1*sizeof(float)));
-
-  //measure how long kernel takes
-  cudaEvent_t start, stop;
-  cudaEventCreate(&start);
-  cudaEventCreate(&stop);
-
-  // run kernel
-  cudaEventRecord(start);
-  pixel_kernel<<<gridSize, dimBlock>>>(d_buffer, d_states, d_scene, d_eyeRayBasis, d_eyePos, samplesPerPixel);
-  cudaEventRecord(stop);
-
-  // copy output buffer back to host
-  OutputBuffer buffer;
-  buffer.color = new float[SCREEN_W*SCREEN_H*3];
-  buffer.normal = new float[SCREEN_W*SCREEN_H*3];
-  buffer.albedo = new float[SCREEN_W*SCREEN_H*3];
-  buffer.depth = new float[SCREEN_W*SCREEN_H*1];
-  buffer.color_var = new float[SCREEN_W*SCREEN_H*1];
-  buffer.normal_var = new float[SCREEN_W*SCREEN_H*1];
-  buffer.albedo_var = new float[SCREEN_W*SCREEN_H*1];
-  buffer.depth_var = new float[SCREEN_W*SCREEN_H*1];
-  gpuErrchk(cudaMemcpy(buffer.color, d_buffer.color, SCREEN_W*SCREEN_H*3*sizeof(float), cudaMemcpyDeviceToHost));
-  gpuErrchk(cudaMemcpy(buffer.normal, d_buffer.normal, SCREEN_W*SCREEN_H*3*sizeof(float), cudaMemcpyDeviceToHost));
-  gpuErrchk(cudaMemcpy(buffer.albedo, d_buffer.albedo, SCREEN_W*SCREEN_H*3*sizeof(float), cudaMemcpyDeviceToHost));
-  gpuErrchk(cudaMemcpy(buffer.depth, d_buffer.depth, SCREEN_W*SCREEN_H*1*sizeof(float), cudaMemcpyDeviceToHost));
-  gpuErrchk(cudaMemcpy(buffer.color_var, d_buffer.color_var, SCREEN_W*SCREEN_H*1*sizeof(float), cudaMemcpyDeviceToHost));
-  gpuErrchk(cudaMemcpy(buffer.normal_var, d_buffer.normal_var, SCREEN_W*SCREEN_H*1*sizeof(float), cudaMemcpyDeviceToHost));
-  gpuErrchk(cudaMemcpy(buffer.albedo_var, d_buffer.albedo_var, SCREEN_W*SCREEN_H*1*sizeof(float), cudaMemcpyDeviceToHost));
-  gpuErrchk(cudaMemcpy(buffer.depth_var, d_buffer.depth_var, SCREEN_W*SCREEN_H*1*sizeof(float), cudaMemcpyDeviceToHost));
-
-  cudaEventSynchronize(stop);
-  float milliseconds = 0;
-  cudaEventElapsedTime(&milliseconds, start, stop);
-  printf("Kernel took %fms (%f fps)\n", milliseconds, 1000.0f/milliseconds);
-
-  // save bitmaps
-  saveBufferToBMP(outputName+"_color.bmp", buffer.color, 3);
-  saveBufferToBMP(outputName+"_normal.bmp", buffer.normal, 3);
-  saveBufferToBMP(outputName+"_albedo.bmp", buffer.albedo, 3);
-  saveBufferToBMP(outputName+"_depth.bmp", buffer.depth, 1);
-  saveBufferToBMP(outputName+"_color_var.bmp", buffer.color_var, 1);
-  saveBufferToBMP(outputName+"_normal_var.bmp", buffer.normal_var, 1);
-  saveBufferToBMP(outputName+"_albedo_var.bmp", buffer.albedo_var, 1);
-  saveBufferToBMP(outputName+"_depth_var.bmp", buffer.depth_var, 1);
-  
-
-
-  // clean up
-  //cudaFree(d_buffer.color);
-  //delete[] screenBuffer;
-  return 0;
 }
