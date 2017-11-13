@@ -35,7 +35,8 @@ Use one of the following commands to render the scene. The output file <outpt na
 cuda-pathtrace outputs a multilayered OpenEXR file containing all of the necessary features to train a deep learning denoising algorithm.
 
 To load the features from the EXR file, the following python code could be used via `feaures = load_exr_data("output.exr")`
-```
+
+```python
 def get_layer(infile, layer_name):
   # extract channel names
   channel_names = []
@@ -77,7 +78,6 @@ def load_exr_data(filename):
   depth_var = get_layer(infile, 'DepthVar')
   # you can also use np.stack to create a 3D array of size [width, height, 14]
   return [color, normal, albedo, depth, color_var, normal_var, albedo_var, depth_var]
-
 ```
 
 ## Built With
