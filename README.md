@@ -42,4 +42,5 @@ Use one of the following to render the scene. The output file <outpt name>.exr w
 ## Built With
 * C++
 * CUDA
-* [tinyexr](https://github.com/syoyo/tinyexr - Saving OpenEXR files
+* [tinyexr](https://github.com/syoyo/tinyexr) - Saving OpenEXR files
+* [stbimage](https://github.com/nothings/stb) - Saving bitmaps
