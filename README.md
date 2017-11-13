@@ -1,21 +1,8 @@
 ![out8192_color](https://user-images.githubusercontent.com/12981474/32717689-6e905072-c80f-11e7-9e9b-bf5d44ae011f.png)
 # cuda-pathtrace
-cuda-pathtrace is a realtime photorealistic pathtracer implemented in CUDA.
+cuda-pathtrace is a realtime photorealistic pathtracer implemented in CUDA. It can currently only render diffuse surfaces and scenes containing spheres.
 
-It can currently only render diffuse surfaces and scenes containing spheres.
-
-By default, cuda-pathtrace outputs the following features which can be used in a denoising algorithm:
-
-* Color
-* Normals
-* Albedo
-* Depth
-* Color Variance
-* Normal Variance
-* Albedo Variance
-* Depth Variance
-
-In the future, cuda-pathtrace's renders will be automatically fed through a deep learning denoising algorithm to provide an interactive realtime photorealistic experience.
+By default, cuda-pathtrace outputs many features which can be used in a denoising algorithm, including color, surface normals, albedo/texture, depth, along with per-pixel variances for each feature. In the future, cuda-pathtrace's low-sample renders will be automatically fed through a deep learning denoising algorithm to provide an interactive realtime photorealistic experience.
 
 ## Installation
 
