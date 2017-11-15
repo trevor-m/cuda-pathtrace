@@ -93,5 +93,7 @@ def load_exr_data(filename):
 ## Built With
 * C++
 * CUDA
+* glm - Mathmatics functions for Camera class
 * [tinyexr](https://github.com/syoyo/tinyexr) - Saving OpenEXR files
 * [stbimage](https://github.com/nothings/stb) - Saving bitmaps
+* [args](https://github.com/Taywee/args) - Parsing command line arguments
