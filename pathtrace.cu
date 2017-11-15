@@ -69,7 +69,6 @@ __device__ float luminance(float3 color) {
 }
 
 
-
 __device__ bool intersectSphere(const Ray& ray, const Sphere& sphere, float* t) {
 	float3 offset = ray.origin - sphere.pos;
 	float a = dot(ray.direction, ray.direction);

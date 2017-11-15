@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include "args.hxx"
 #define TINYEXR_IMPLEMENTATION
 #include "tinyexr.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -106,27 +107,34 @@ void saveBuffersToEXR(std::string filename, const OutputBuffer& buffer) {
 }
 
 int main(int argc, const char** argv) {
+  args::ArgumentParser parser("cuda-pathtrace");
+  parser.LongSeparator(" ");
+  args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
+  args::ValueFlag<int> argSamples(parser, "samples", "Number of samples per pixel", {'s', "samples"});
+  args::ValueFlag<int> argDevice(parser, "device", "Which CUDA device to use (default 0)", {'d', "device"});
+  args::ValueFlag<std::string> argOutput(parser, "path", "Prefix of output file name(s)", {'o', "output"});
+  args::Flag argNoBitmaps(parser, "nobitmap", "Do not output bitmap features (only the exr)", {'n', "nobitmap"});
+  try {
+    parser.ParseCLI(argc, argv);
+  }
+  catch (args::Help) {
+    std::cout << parser;
+    return 0;
+  }
+  catch (args::ParseError e) {
+    std::cerr << e.what() << std::endl;
+    std::cerr << parser;
+    return 1;
+  }
+  catch (args::ValidationError e) {
+    std::cerr << e.what() << std::endl;
+    std::cerr << parser;
+    return 1;
+  }
   //get arguments
-  int samplesPerPixel = SAMPLES;
-  int cudaDevice = 0;
-  std::string outputName = "output";
-  if(argc == 2) {
-    samplesPerPixel = std::stoi(argv[1]);
-  }
-  else if(argc == 3) {
-    samplesPerPixel = std::stoi(argv[1]);
-    outputName = std::string(argv[2]);
-  }
-  else if(argc == 4) {
-    samplesPerPixel = std::stoi(argv[1]);
-    outputName = std::string(argv[2]);
-    cudaDevice = std::stoi(argv[3]);
-  }
-  else {
-    std::cout << "Usage:" << std::endl;
-    std::cout << "\tpathtrace <samples per pixel> <output name>" << std::endl;
-    std::cout << "\tpathtrace <samples per pixel> <output name> <CUDA device>" << std::endl;
-  }
+  int samplesPerPixel = (argSamples) ? args::get(argSamples) : SAMPLES;
+  int cudaDevice = (argDevice) ? args::get(argDevice) : 0;
+  std::string outputName = (argOutput) ? args::get(argOutput) : "output";
 
   std::cout << "Output file prefix: " << outputName << std::endl;
   std::cout << "Samples per pixel: " << samplesPerPixel << std::endl;
@@ -160,7 +168,7 @@ int main(int argc, const char** argv) {
    { 1e5f, { 50.0f, -1e5f + 81.6f, 81.6f }, { 0.0f, 0.0f, 0.0f }, { .75f, .75f, .75f } }, //Top 
    { 16.5f, { 27.0f, 16.5f, 47.0f }, { 0.0f, 0.0f, 0.0f }, { 1.0f, 1.0f, 1.0f } }, // small sphere 1
    { 16.5f, { 73.0f, 16.5f, 78.0f }, { 0.0f, 0.0f, 0.0f }, { 1.0f, 1.0f, 1.0f } }, // small sphere 2
-   { 600.0f, { 50.0f, 681.6f - .78f, 81.6f }, { 2.0f, 1.8f, 1.6f }, { 0.0f, 0.0f, 0.0f } }  // Light y=-/77 originally
+   { 600.0f, { 50.0f, 681.6f - .78f, 81.6f }, { 4.0f, 3.6f, 3.2f }, { 0.0f, 0.0f, 0.0f } }  // Light y=-/77 originally
   };
   gpuErrchk(cudaMalloc(&d_scene.objects, d_scene.numObjects*sizeof(Sphere)));
   gpuErrchk(cudaMemcpy(d_scene.objects, spheres, d_scene.numObjects*sizeof(Sphere), cudaMemcpyHostToDevice));
@@ -225,15 +233,16 @@ int main(int argc, const char** argv) {
   saveBuffersToEXR(outputName+".exr", buffer);
 
   // save bitmaps
-  saveBufferToBMP(outputName+"_color.bmp", buffer.color, 3);
-  saveBufferToBMP(outputName+"_normal.bmp", buffer.normal, 3);
-  saveBufferToBMP(outputName+"_albedo.bmp", buffer.albedo, 3);
-  saveBufferToBMP(outputName+"_depth.bmp", buffer.depth, 1);
-  saveBufferToBMP(outputName+"_color_var.bmp", buffer.color_var, 1);
-  saveBufferToBMP(outputName+"_normal_var.bmp", buffer.normal_var, 1);
-  saveBufferToBMP(outputName+"_albedo_var.bmp", buffer.albedo_var, 1);
-  saveBufferToBMP(outputName+"_depth_var.bmp", buffer.depth_var, 1);
-  
+  if(!argNoBitmaps) {
+    saveBufferToBMP(outputName+"_color.bmp", buffer.color, 3);
+    saveBufferToBMP(outputName+"_normal.bmp", buffer.normal, 3);
+    saveBufferToBMP(outputName+"_albedo.bmp", buffer.albedo, 3);
+    saveBufferToBMP(outputName+"_depth.bmp", buffer.depth, 1);
+    saveBufferToBMP(outputName+"_color_var.bmp", buffer.color_var, 1);
+    saveBufferToBMP(outputName+"_normal_var.bmp", buffer.normal_var, 1);
+    saveBufferToBMP(outputName+"_albedo_var.bmp", buffer.albedo_var, 1);
+    saveBufferToBMP(outputName+"_depth_var.bmp", buffer.depth_var, 1);
+  }
 
 
   // clean up
