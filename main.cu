@@ -112,6 +112,7 @@ int main(int argc, const char** argv) {
   args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
   args::ValueFlag<int> argSamples(parser, "samples", "Number of samples per pixel", {'s', "samples"});
   args::ValueFlag<int> argDevice(parser, "device", "Which CUDA device to use (default 0)", {'d', "device"});
+  args::ValueFlag<int> argThreads(parser, "threads", "Number of threads per block (default 32)", {'t', "threads-per-block"});
   args::ValueFlag<std::string> argOutput(parser, "path", "Prefix of output file name(s)", {'o', "output"});
   args::Flag argNoBitmaps(parser, "nobitmap", "Do not output bitmap features (only the exr)", {'n', "nobitmap"});
   try {
@@ -141,7 +142,7 @@ int main(int argc, const char** argv) {
   std::cout << "Using CUDA device: " << cudaDevice << std::endl;
 
   // determine how to distribute work to GPU
-  int blockSize = 32;
+  int blockSize = (argThreads) ? args::get(argThreads) : 32;
   int bx = (SCREEN_W + blockSize - 1)/blockSize;
   int by = (SCREEN_H + blockSize - 1)/blockSize;
   dim3 gridSize = dim3(bx, by);

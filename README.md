@@ -1,4 +1,4 @@
-![out8192_color](https://user-images.githubusercontent.com/12981474/32717689-6e905072-c80f-11e7-9e9b-bf5d44ae011f.png)
+![render](https://user-images.githubusercontent.com/12981474/32823079-768c3b56-c990-11e7-85d5-9b55fcb8572e.png)
 # cuda-pathtrace
 
 cuda-pathtrace is a realtime photorealistic pathtracer implemented in CUDA. It can currently only render diffuse surfaces and scenes containing spheres.
@@ -22,13 +22,23 @@ Type `make` to build the application (Tested on Ubuntu 16.04).
 
 ## Usage
 
-Use one of the following commands to render the scene. The output file <outpt name>.exr will be created with the results of your render.
+cuda-pathtrace accepts the following arguments. The output file <output name>.exr will be created with the results of your render.
 
-`./pathtrace <samples per pixel>`
+```
+  ./pathtrace {OPTIONS}
 
-`./pathtrace <samples per pixel> <output name>`
+    cuda-pathtrace
 
-`./pathtrace <samples per pixel> <output name> <CUDA device>`
+  OPTIONS:
+
+      -h, --help                        Display this help menu
+      -s [samples], --samples [samples]  Number of samples per pixel
+      -d [device], --device [device]     Which CUDA device to use (default 0)
+      -o [path], --output [path]         Prefix of output file name(s)
+      -n, --nobitmap                    Do not output bitmap features (only the
+                                        exr)
+
+```
 
 ## Using the Rendered Features
 
