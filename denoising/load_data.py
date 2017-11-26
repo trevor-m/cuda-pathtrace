@@ -61,7 +61,7 @@ def save_exr_data(filename, data):
   """"""
   pass
 
-def get_patches(filename, gt_filename, patch_size=64, num_patches=400, preprocess=False):
+def get_patches(filename, gt_filename, patch_size=64, num_patches=200, preprocess=False):
   data = load_exr_data(filename, preprocess=preprocess, concat=True)
   gt = load_exr_data(gt_filename, preprocess=preprocess)[0]
   w = data.shape[0]
@@ -73,8 +73,8 @@ def get_patches(filename, gt_filename, patch_size=64, num_patches=400, preproces
   total_score = 0
   for i in range(num_patches*4):
     # pick random point to be the top-left corner of patch
-    x = random.randint(0, w-patch_size)
-    y = random.randint(0, h-patch_size)
+    x = random.randint(0, w-patch_size-1)
+    y = random.randint(0, h-patch_size-1)
     patch = data[x:x+patch_size, y:y+patch_size, :]
     patch_gt = gt[x:x+patch_size, y:y+patch_size, :]
     score = get_score(patch)
@@ -97,6 +97,7 @@ def get_patches(filename, gt_filename, patch_size=64, num_patches=400, preproces
         del candidate_patch_scores[i]
         del candidate_patches_gt[i]
         del candidate_patches[i]
+        break
 
   return np.array(patches), np.array(patches_gt)
 

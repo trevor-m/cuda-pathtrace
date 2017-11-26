@@ -23,14 +23,20 @@ def build_model():
   gt_color = tf.placeholder(tf.float32, [None, None, None, 3], name='gt_color')
   
   with tf.variable_scope("denoiser"):
-    x = tf.layers.conv2d(input_features, filters=64, kernel_size=(5,5), padding='same', activation=tf.nn.relu)
-    x = tf.layers.conv2d(x, filters=64, kernel_size=(5,5), padding='same', activation=tf.nn.relu)
-    x = tf.layers.conv2d(x, filters=64, kernel_size=(5,5), padding='same', activation=tf.nn.relu)
-    x = tf.layers.conv2d(x, filters=64, kernel_size=(5,5), padding='same', activation=tf.nn.relu)
-    x = tf.layers.conv2d(x, filters=64, kernel_size=(5,5), padding='same', activation=tf.nn.relu)
-    x = tf.layers.conv2d(x, filters=64, kernel_size=(5,5), padding='same', activation=tf.nn.relu)
-    x = tf.layers.conv2d(x, filters=64, kernel_size=(5,5), padding='same', activation=tf.nn.relu)
-    denoised_color = tf.layers.conv2d(x, filters=3, kernel_size=(5,5), padding='same')
+    x = tf.layers.conv2d(input_features, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    denoised_color = tf.layers.conv2d(x, filters=3, kernel_size=(3,3), padding='same')
 
   loss = tf.reduce_sum(tf.abs(denoised_color - gt_color))
   train_step = tf.train.AdamOptimizer(learning_rate=1e-4).minimize(loss)
@@ -56,7 +62,8 @@ def build_output_dir(name=None):
     os.makedirs(log_path)
   return log_path
 
-def get_batch(data, gt, batch_size):
+def get_batch(batch_size):
+  data, gt = get_patches('../16.exr', '../20k.exr', preprocess=True, patch_size=64, num_patches=batch_size)
   idx = np.random.choice(len(data), batch_size, replace=False)
   return np.stack(data[idx], 0), np.stack(gt[idx], 0)
 
@@ -70,10 +77,11 @@ def main():
   args = parser.parse_args()
 
   # create model
-  model_output, model_loss, model_train = build_model()
+  with tf.device('/device:GPU:1'):
+    model_output, model_loss, model_train = build_model()
   
   # load training data
-  train_data, train_gt = get_patches('../4.exr', '../20k.exr', preprocess=True)
+  #train_data, train_gt = get_patches('../16.exr', '../20k.exr', preprocess=True, patch_size=64, num_patches=1600)
   #print(train_data.shape, train_gt.shape)
   #for i in range(train_gt.shape[0]):
   #  save_image('patches/patch'+str(i)+'.png', train_gt[i])
@@ -84,6 +92,9 @@ def main():
   # load color layer only for gt
   test_gt = load_exr_data('../20k.exr', preprocess=True)[0]
   test_gt = test_gt.reshape((1, test_gt.shape[0], test_gt.shape[1], test_gt.shape[2]))
+
+  #test_in = test_in[:, 256:384, 256:384, :]
+  #test_gt = test_gt[:, 256:384, 256:384, :]
   
   # start session
   sess = tf.Session()
