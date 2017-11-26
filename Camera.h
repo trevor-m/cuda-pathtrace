@@ -1,7 +1,7 @@
 #pragma once
 // This is from the tutorials at http://www.learnopengl.com/
 
-//CUDA Includes
+// CUDA Includes
 #include <vector_types.h>
 #include <vector_functions.h>
 
@@ -69,7 +69,7 @@ public:
 	}
 
 	// Returns the view matrix calculated using Eular Angles and the LookAt Matrix
-	glm::mat4 GetViewMatrix()
+	glm::mat4 GetViewMatrix() const
 	{
 		return glm::lookAt(this->Position, this->Position + this->Front, this->Up);
 	}
@@ -121,7 +121,7 @@ public:
 			this->Zoom = 45.0f;
 	}
 
-	void getEyeRayBasis(float3* output, int w, int h) {
+	void getEyeRayBasis(float3* output, int w, int h) const {
 		// get ray basis from camera
 		glm::mat4 view;
 		view = GetViewMatrix();

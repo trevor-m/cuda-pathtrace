@@ -4,7 +4,7 @@
 
 
 // Renderer constants
-#define MAX_BOUNCES 8
+#define MAX_BOUNCES 5
 #define PUSH_RAY_ORIGIN 0.05f
 
 struct HitData {
@@ -106,6 +106,18 @@ __device__ bool intersectScene(const Scene& scene, const Ray& ray, HitData* hitD
 	return hit;
 }
 
+__device__ float testShadowRay(const Scene& scene, const Ray& ray, int lightIndex) {
+  float tNearest = length(scene.objects[lightIndex].pos- make_float3(0, scene.objects[lightIndex].radius, 0) - ray.origin);
+	float t = 0;
+	for (int i = 0; i < scene.numObjects; i++) {
+		//if there was an intersection and it is the closest
+		if (i != lightIndex && intersectSphere(ray, scene.objects[i], &t) && t > 0 && t < tNearest) {
+			return 0.0f;
+		}
+	}
+	return 1.0f;
+}
+
 __device__ float3 orthoVector(float3 v) {
     //  See : http://lolengine.net/blog/2013/09/21/picking-orthogonal-vector-combing-coconuts
     return (abs(v.x) > abs(v.z)) ? make_float3(-v.y, v.x, 0.0f)  : make_float3(0.0f, -v.z, v.y);
@@ -123,31 +135,50 @@ __device__ float3 getCosineWeightedNormal(float3 dir, curandState* randState) {
 	return cos(r.x) * oneminus * o1 + sin(r.x) * oneminus * o2 + r.y * dir;
 }
 
+__device__ float3 getDirectLighting(const Scene& scene, const float3& normal, const float3& position) {
+  // TODO: sample random point on light
+  // TODO: make lights array
+  int lightIndex = 8;
+  float3 lightDir = normalize(scene.objects[lightIndex].pos - make_float3(0, scene.objects[lightIndex].radius, 0) - position);
+  float diffuse = clamp(dot(lightDir, normal), 0.0, 1.0);
+  Ray shadowRay;
+  shadowRay.origin = position + normal * PUSH_RAY_ORIGIN;
+  shadowRay.direction = lightDir;
+  return diffuse * scene.objects[lightIndex].emission * testShadowRay(scene, shadowRay, lightIndex);
+}
+
 __device__ void trace_ray(TraceOutput& L, const Scene& scene, Ray ray, curandState* randState, int x, int y, OnlineVarianceBuffer& var) {
   HitData hitData;
   float3 color = make_float3(0,0,0);
   float3 mask = make_float3(1,1,1);
   
   for (int n = 0; n < MAX_BOUNCES; n++) {
-    // ray leaves the scene
+    // intersect with surface
     if (!intersectScene(scene, ray, &hitData)) {
+      // ray leaves the scene
       L.color += color;
       return;
     }
-    
-    // accumulate emmission
-    color += mask * scene.objects[hitData.index].emission;
-    // attenuate color for next bounce
-    mask *= scene.objects[hitData.index].color; //account for incoming direction??
-
-    // bounce off surface
+    // get intersection position and normal
     float3 pos = ray.origin + ray.direction * hitData.t;
     float3 normal = normalize(pos - scene.objects[hitData.index].pos);
     // flip normal if necessary
     normal = dot(normal, ray.direction) < 0 ? normal : -1 * normal;
+    
+    // direct lighting
+    //color += mask * getDirectLighting(scene, normal, pos) * scene.objects[hitData.index].color * 0.5f;
+
+    color += mask * scene.objects[hitData.index].emission;
+    mask *= scene.objects[hitData.index].color;
+    
     // create next ray
     ray.origin = pos + normal * PUSH_RAY_ORIGIN;
+    // diffuse bounce
     ray.direction = normalize(getCosineWeightedNormal(normal, randState));
+    // makeshift glossy BRDF
+    //ray.direction = reflect(ray.direction, normal);
+    //ray.direction += 0.01* make_float3(curand_uniform(randState), curand_uniform(randState), curand_uniform(randState)) - 0.005;
+    //ay.direction = normalize(ray.direction);
 
     // record first bounce information
     if(n == 0) {
@@ -169,9 +200,9 @@ __device__ void trace_ray(TraceOutput& L, const Scene& scene, Ray ray, curandSta
 __global__ void pixel_kernel(OutputBuffer output, curandState* randStates, Scene scene, float3* rayBasis, float3* eyePos, int spp) {
   int x = blockIdx.x * blockDim.x + threadIdx.x;
   int y = blockIdx.y * blockDim.y + threadIdx.y;
-  int id = x * SCREEN_W + y;
+  int id = x * output.width + y;
 
-  if (x >= SCREEN_W || y >= SCREEN_H)
+  if (x >= output.width || y >= output.height)
     return;
   
   //copy random state to local memory
@@ -184,8 +215,12 @@ __global__ void pixel_kernel(OutputBuffer output, curandState* randStates, Scene
 
   for (int i = 0; i < spp; i++) {
     // determine ray direction by interpolating from basis
-    float2 screenPos = make_float2(x + curand_uniform(&localRandState)*1.0f - 0.5f, y + curand_uniform(&localRandState)*1.0f - 0.5f);
-    screenPos /= make_float2(SCREEN_W, SCREEN_H);
+    float2 screenPos = make_float2(x, y);
+    if (spp != 1) {
+      screenPos.x += curand_uniform(&localRandState)*1.0f - 0.5f;
+      screenPos.y += curand_uniform(&localRandState)*1.0f - 0.5f;
+    }
+    screenPos /= make_float2(output.width, output.height);
     Ray ray;
     ray.origin = *eyePos;
     ray.direction = lerp(lerp(rayBasis[0], rayBasis[1], screenPos.y), lerp(rayBasis[2], rayBasis[3], screenPos.y), 1.0f-screenPos.x);
@@ -199,30 +234,30 @@ __global__ void pixel_kernel(OutputBuffer output, curandState* randStates, Scene
   L.depth /= (float)spp;
   
   // write to output buffer
-  output.color[x*SCREEN_W*3 + y*3 + 0] = L.color.x;
-  output.color[x*SCREEN_W*3 + y*3 + 1] = L.color.y;
-  output.color[x*SCREEN_W*3 + y*3 + 2] = L.color.z;
-  output.normal[x*SCREEN_W*3 + y*3 + 0] = L.normal.x;
-  output.normal[x*SCREEN_W*3 + y*3 + 1] = L.normal.y;
-  output.normal[x*SCREEN_W*3 + y*3 + 2] = L.normal.z;
-  output.albedo[x*SCREEN_W*3 + y*3 + 0] = L.albedo.x;
-  output.albedo[x*SCREEN_W*3 + y*3 + 1] = L.albedo.y;
-  output.albedo[x*SCREEN_W*3 + y*3 + 2] = L.albedo.z;
-  output.depth[x*SCREEN_W + y] = L.depth;
+  output.color[x*output.width*3 + y*3 + 0] = L.color.x;
+  output.color[x*output.width*3 + y*3 + 1] = L.color.y;
+  output.color[x*output.width*3 + y*3 + 2] = L.color.z;
+  output.normal[x*output.width*3 + y*3 + 0] = L.normal.x;
+  output.normal[x*output.width*3 + y*3 + 1] = L.normal.y;
+  output.normal[x*output.width*3 + y*3 + 2] = L.normal.z;
+  output.albedo[x*output.width*3 + y*3 + 0] = L.albedo.x;
+  output.albedo[x*output.width*3 + y*3 + 1] = L.albedo.y;
+  output.albedo[x*output.width*3 + y*3 + 2] = L.albedo.z;
+  output.depth[x*output.width + y] = L.depth;
   // get final variances
-  output.color_var[x*SCREEN_W + y] = var.getVariance(Features::COLOR);
-  output.normal_var[x*SCREEN_W + y] = var.getVariance(Features::NORMAL);
-  output.albedo_var[x*SCREEN_W + y] = var.getVariance(Features::ALBEDO);
-  output.depth_var[x*SCREEN_W + y] = var.getVariance(Features::DEPTH);
+  output.color_var[x*output.width + y] = var.getVariance(Features::COLOR);
+  output.normal_var[x*output.width + y] = var.getVariance(Features::NORMAL);
+  output.albedo_var[x*output.width + y] = var.getVariance(Features::ALBEDO);
+  output.depth_var[x*output.width + y] = var.getVariance(Features::DEPTH);
   // copy rand state back to global memory
   randStates[id] = localRandState;
 }
 
-__global__ void setup_random(curandState* states) {
+__global__ void setup_random(curandState* states, int width, int height) {
   int x = blockIdx.x * blockDim.x + threadIdx.x;
   int y = blockIdx.y * blockDim.y + threadIdx.y;
-  int id = x * SCREEN_W + y;
-  if (x >= SCREEN_W || y >= SCREEN_H)
+  int id = x * width + y;
+  if (x >= width || y >= height)
     return;
   curand_init(id, 0, 0, &states[id]);
 }
