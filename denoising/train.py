@@ -27,15 +27,15 @@ def build_model():
     x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
     x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
     x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
-    x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
-    x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
-    x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
-    x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
-    x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
-    x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
-    x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
-    x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
-    x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    #x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    #x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    #x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    #x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    #x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    #x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    #x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    #x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
+    #x = tf.layers.conv2d(x, filters=64, kernel_size=(3,3), padding='same', activation=tf.nn.relu)
     denoised_color = tf.layers.conv2d(x, filters=3, kernel_size=(3,3), padding='same')
 
   loss = tf.reduce_sum(tf.abs(denoised_color - gt_color))
@@ -62,8 +62,8 @@ def build_output_dir(name=None):
     os.makedirs(log_path)
   return log_path
 
-def get_batch(batch_size):
-  data, gt = get_patches('../16.exr', '../20k.exr', preprocess=True, patch_size=64, num_patches=batch_size)
+def get_batch(data, gt, batch_size):
+  data, gt = get_patches(data, gt, patch_size=64, num_patches=batch_size)
   idx = np.random.choice(len(data), batch_size, replace=False)
   return np.stack(data[idx], 0), np.stack(gt[idx], 0)
 
@@ -81,7 +81,8 @@ def main():
     model_output, model_loss, model_train = build_model()
   
   # load training data
-  #train_data, train_gt = get_patches('../16.exr', '../20k.exr', preprocess=True, patch_size=64, num_patches=1600)
+  train_data = load_exr_data('../4.exr', preprocess=True, concat=True)
+  train_gt = load_exr_data('../20k.exr', preprocess=True)[0]
   #print(train_data.shape, train_gt.shape)
   #for i in range(train_gt.shape[0]):
   #  save_image('patches/patch'+str(i)+'.png', train_gt[i])
@@ -92,9 +93,6 @@ def main():
   # load color layer only for gt
   test_gt = load_exr_data('../20k.exr', preprocess=True)[0]
   test_gt = test_gt.reshape((1, test_gt.shape[0], test_gt.shape[1], test_gt.shape[2]))
-
-  #test_in = test_in[:, 256:384, 256:384, :]
-  #test_gt = test_gt[:, 256:384, 256:384, :]
   
   # start session
   sess = tf.Session()
@@ -118,8 +116,8 @@ def main():
       if args.test_only:
         return
     # train
-    train_data, train_gt = get_batch(train_data, train_gt, batch_size=args.batch_size)
-    train_loss = sess.run(model_train, feed_dict={'input_features:0': train_data, 'gt_color:0': train_gt})
+    data, gt = get_batch(train_data, train_gt, batch_size=args.batch_size)
+    train_loss = sess.run(model_train, feed_dict={'input_features:0': data, 'gt_color:0': gt})
 
 if __name__ == '__main__':
   main()

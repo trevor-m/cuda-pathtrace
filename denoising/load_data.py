@@ -61,9 +61,9 @@ def save_exr_data(filename, data):
   """"""
   pass
 
-def get_patches(filename, gt_filename, patch_size=64, num_patches=200, preprocess=False):
-  data = load_exr_data(filename, preprocess=preprocess, concat=True)
-  gt = load_exr_data(gt_filename, preprocess=preprocess)[0]
+def get_patches(data, gt, patch_size=64, num_patches=200):
+  #data = load_exr_data(filename, preprocess=preprocess, concat=True)
+  #gt = load_exr_data(gt_filename, preprocess=preprocess)[0]
   w = data.shape[0]
   h = data.shape[1]
 
