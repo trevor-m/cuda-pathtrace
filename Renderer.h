@@ -77,19 +77,6 @@ public:
     cudaEventElapsedTime(&milliseconds, start, stop);
     return milliseconds;
   }
-
-  void Denoise();
-
-  /*void CopyBufferToScreen() {
-
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
-    glActiveTexture(GL_TEXTURE0 + RENDER_TEXTURE);
-    glBindTexture(GL_TEXTURE_2D, result_texture);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, image_width, image_height, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-    glActiveTexture(GL_TEXTURE0 + UNUSED_TEXTURE);
-    // draw quad
-  }*/
 };
 
 #endif

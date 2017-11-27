@@ -5,6 +5,7 @@
 #include "tinyexr.h"
 #include "stb_image_write.h"
 #include <vector>
+#include <string>
 
 // Full pixel buffer for all channels
 class OutputBuffer {

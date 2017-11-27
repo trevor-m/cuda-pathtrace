@@ -1,5 +1,7 @@
 #include "Renderer.h"
+#include "Denoiser.h"
 #include "Camera.h"
+#include "Window.h"
 #include "Scene.h"
 #include <iostream>
 #include <string>
@@ -17,7 +19,6 @@ int main(int argc, const char** argv) {
   parser.LongSeparator(" ");
   args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
   args::ValueFlag<int> argWidth(parser, "w", "Image/window width (default 512)", {'w', "width"});
-  args::ValueFlag<int> argHeight(parser, "h", "Image/window height (default 512)", {'h', "height"});
   args::ValueFlag<int> argSamples(parser, "samples", "Number of samples per pixel (default 4)", {'s', "samples"});
   args::ValueFlag<int> argDevice(parser, "device", "Which CUDA device to use (default 0)", {'d', "device"});
   args::ValueFlag<int> argThreads(parser, "threads", "Number of threads per block (default 8)", {'t', "threads-per-block"});
@@ -42,11 +43,12 @@ int main(int argc, const char** argv) {
     return 1;
   }
   //get arguments
-  int width = (argWidth) ? args::get(argThreads) : 512;
-  int height = (argHeight) ? args::get(argThreads) : 512;
+  int width = (argWidth) ? args::get(argWidth) : 512;
+  int height = width;
   int threadsPerBlock = (argThreads) ? args::get(argThreads) : 8;
   int samplesPerPixel = (argSamples) ? args::get(argSamples) : 4;
   int cudaDevice = (argDevice) ? args::get(argDevice) : 0;
+
   std::string outputName = (argOutput) ? args::get(argOutput) : "output/out";
   std::cout << "cuda-pathtrace 0.2" << std::endl;
   std::cout << "------------------" << std::endl;
@@ -58,19 +60,28 @@ int main(int argc, const char** argv) {
 
   // set cuda device
   gpuErrchk(cudaSetDevice(cudaDevice));
+  //if (argIteractive)
+  //   gpuErrchk(cudaGLSetGLDevice(cudaDevice));
 
   // create renderer
   Scene scene;
   Renderer renderer(width, height, samplesPerPixel, threadsPerBlock);
+  Denoiser denoiser(width, height, threadsPerBlock);
   Camera camera(glm::vec3(50, 52, 295.6));
-
+  
   if (argIteractive) {
     // interactive (realtime) mode
-    //while(1) {
-    //  renderer.Render(camera);
-    //  renderer.Denoise();
-    //  renderer.CopyBufferToScreen();
-    //}
+    Window window(width, height, &camera);
+    GLPixelBuffer denoisedBuffer(width, height);
+
+    while(!window.ShouldClose()) {
+      window.DoMovement();
+      renderer.Render(scene, camera);
+      //cudaThreadSynchronize();
+      denoiser.Denoise(renderer.d_buffer, denoisedBuffer);
+      //cudaThreadSynchronize();
+      window.DrawToScreen(denoisedBuffer);
+    }
   }
   else {
     // data collection (single frame render) mode
@@ -88,4 +99,24 @@ int main(int argc, const char** argv) {
   }
   
   return 0;
+}
+
+ 
+void _check_gl_error(const char *file, int line) {
+        GLenum err (glGetError());
+ 
+        while(err!=GL_NO_ERROR) {
+                std::string error;
+ 
+                switch(err) {
+                        case GL_INVALID_OPERATION:      error="INVALID_OPERATION";      break;
+                        case GL_INVALID_ENUM:           error="INVALID_ENUM";           break;
+                        case GL_INVALID_VALUE:          error="INVALID_VALUE";          break;
+                        case GL_OUT_OF_MEMORY:          error="OUT_OF_MEMORY";          break;
+                        case GL_INVALID_FRAMEBUFFER_OPERATION:  error="INVALID_FRAMEBUFFER_OPERATION";  break;
+                }
+ 
+                std::cerr << "GL_" << error.c_str() <<" - "<<file<<":"<<line<<std::endl;
+                err=glGetError();
+        }
 }
