@@ -30,7 +30,7 @@ public:
       { 1e5f, { 50.0f, -1e5f + 81.6f, 81.6f }, { 0.0f, 0.0f, 0.0f }, { .75f, .75f, .75f } }, //Top 
       { 16.5f, { 27.0f, 16.5f, 47.0f }, { 0.0f, 0.0f, 0.0f }, { 1.0f, 1.0f, 1.0f } }, // small sphere 1
       { 16.5f, { 73.0f, 16.5f, 78.0f }, { 0.0f, 0.0f, 0.0f }, { 1.0f, 1.0f, 1.0f } }, // small sphere 2
-      { 600.0f, { 50.0f, 681.6f - .78f, 81.6f }, { 4.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.0f } }  // Light y=-/77 originally
+      { 600.0f, { 50.0f, 681.6f - .78f, 81.6f }, { 4.0f, 3.6f, 3.2f }, { 0.0f, 0.0f, 0.0f } }  // Light y=-/77 originally
     };
     gpuErrchk(cudaMalloc(&objects, numObjects*sizeof(Sphere)));
     gpuErrchk(cudaMemcpy(objects, spheres, numObjects*sizeof(Sphere), cudaMemcpyHostToDevice));

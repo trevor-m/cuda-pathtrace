@@ -29,7 +29,7 @@ int main(int argc, const char** argv) {
   args::ValueFlag<float> argViewPitch(parser, "pitch", "Starting camera view pitch", {'p', "camera-pitch"});
   args::ValueFlag<std::string> argOutput(parser, "path", "Prefix of output file name(s) (default output/output)", {'o', "output"});
   args::Flag argNoBitmaps(parser, "nobitmap", "Do not output bitmap features - only the exr", {'n', "nobitmap"});
-  args::Flag argIteractive(parser, "interactive", "Open in interactive mode  - will only render a single frame if not set", {'i', "interactive"});
+  args::Flag argInteractive(parser, "interactive", "Open in interactive mode  - will only render a single frame if not set", {'i', "interactive"});
   try {
     parser.ParseCLI(argc, argv);
   }
@@ -74,7 +74,9 @@ int main(int argc, const char** argv) {
   std::cout << "Threads per block: " << threadsPerBlock << std::endl;
   std::cout << "Samples per pixel: " << samplesPerPixel << std::endl;
   std::cout << "Using CUDA device: " << cudaDevice << std::endl;
-  std::cout << "Output file prefix: " << outputName << std::endl;
+  if (!argInteractive)
+    std::cout << "Output file prefix: " << outputName << std::endl;
+  std::cout << "Camera: " << cameraPos[0] << " " << cameraPos[1] << " " << cameraPos[2] << " " << cameraView[0] << " " << cameraView[1] << std::endl;
 
   // set cuda device
   gpuErrchk(cudaSetDevice(cudaDevice));
@@ -87,7 +89,7 @@ int main(int argc, const char** argv) {
   Denoiser denoiser(width, height, threadsPerBlock);
   Camera camera(glm::make_vec3(cameraPos), cameraView[0], cameraView[1]);
   
-  if (argIteractive) {
+  if (argInteractive) {
     // interactive (realtime) mode
     Window window(width, height, &camera);
     GLPixelBuffer denoisedBuffer(width, height);
@@ -106,6 +108,7 @@ int main(int argc, const char** argv) {
     // render frame
     float renderTime = renderer.Render(scene, camera);
     std::cout << "Render completed in " << renderTime << "ms (" << 1000.0f/renderTime << " fps)" << std::endl;
+    std::cout << std::endl;
     // save results
     OutputBuffer buffer(width, height);
     buffer.AllocateCPU();
@@ -117,24 +120,4 @@ int main(int argc, const char** argv) {
   }
   
   return 0;
-}
-
- 
-void _check_gl_error(const char *file, int line) {
-        GLenum err (glGetError());
- 
-        while(err!=GL_NO_ERROR) {
-                std::string error;
- 
-                switch(err) {
-                        case GL_INVALID_OPERATION:      error="INVALID_OPERATION";      break;
-                        case GL_INVALID_ENUM:           error="INVALID_ENUM";           break;
-                        case GL_INVALID_VALUE:          error="INVALID_VALUE";          break;
-                        case GL_OUT_OF_MEMORY:          error="OUT_OF_MEMORY";          break;
-                        case GL_INVALID_FRAMEBUFFER_OPERATION:  error="INVALID_FRAMEBUFFER_OPERATION";  break;
-                }
- 
-                std::cerr << "GL_" << error.c_str() <<" - "<<file<<":"<<line<<std::endl;
-                err=glGetError();
-        }
 }

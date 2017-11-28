@@ -30,7 +30,6 @@ public:
     // create buffer to output to which is mapped to an opengl texture
     cudaThreadSynchronize();
     float* d_output;
-    check_gl_error();
     denoisedBuffer.MapToGPU(&d_output);
     
     // launch kernel

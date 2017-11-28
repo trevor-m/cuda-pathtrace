@@ -51,9 +51,7 @@ public:
     // turn on GLEW
     glewExperimental = GL_TRUE;
     glewInit();
-    check_gl_error();
     //glUseProgram(0);
-    check_gl_error();
     // tell OpenGL size of rendering window
     glViewport(0, 0, width, height);
     glClearColor(0.0, 0.0, 0.0, 0.0);
@@ -68,7 +66,6 @@ public:
     // register callbacks
     glfwSetKeyCallback(window, keyCallback);
     glfwSetCursorPosCallback(window, mouseCallback);
-    check_gl_error();
     // set up textured quad
     //InitQuad();
 
@@ -154,7 +151,7 @@ public:
 
     if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) {
       Window* w = (Window*)glfwGetWindowUserPointer(window);
-      std::cout << w->camera->Position.x << " " << w->camera->Position.y << " " << w->camera->Position.z << " - " << w->camera->Yaw << " " << w->camera->Pitch << " " << std::endl;
+      std::cout << w->camera->Position.x << " " << w->camera->Position.y << " " << w->camera->Position.z << " " << w->camera->Yaw << " " << w->camera->Pitch << " " << std::endl;
     }
 
     if (key >= 0 && key < 1024) {
