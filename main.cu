@@ -22,6 +22,11 @@ int main(int argc, const char** argv) {
   args::ValueFlag<int> argSamples(parser, "samples", "Number of samples per pixel (default 4)", {'s', "samples"});
   args::ValueFlag<int> argDevice(parser, "device", "Which CUDA device to use (default 0)", {'d', "device"});
   args::ValueFlag<int> argThreads(parser, "threads", "Number of threads per block (default 8)", {'t', "threads-per-block"});
+  args::ValueFlag<float> argCameraX(parser, "x", "Starting camera position x", {'x', "camera-x"});
+  args::ValueFlag<float> argCameraY(parser, "y", "Starting camera position y", {'y', "camera-y"});
+  args::ValueFlag<float> argCameraZ(parser, "z", "Starting camera position z", {'z', "camera-z"});
+  args::ValueFlag<float> argViewYaw(parser, "yaw", "Starting camera view yaw", {'c', "camera-yaw"});
+  args::ValueFlag<float> argViewPitch(parser, "pitch", "Starting camera view pitch", {'p', "camera-pitch"});
   args::ValueFlag<std::string> argOutput(parser, "path", "Prefix of output file name(s) (default output/output)", {'o', "output"});
   args::Flag argNoBitmaps(parser, "nobitmap", "Do not output bitmap features - only the exr", {'n', "nobitmap"});
   args::Flag argIteractive(parser, "interactive", "Open in interactive mode  - will only render a single frame if not set", {'i', "interactive"});
@@ -48,6 +53,19 @@ int main(int argc, const char** argv) {
   int threadsPerBlock = (argThreads) ? args::get(argThreads) : 8;
   int samplesPerPixel = (argSamples) ? args::get(argSamples) : 4;
   int cudaDevice = (argDevice) ? args::get(argDevice) : 0;
+  // camera arguments
+  float cameraPos[3] = { 50.0f, 52.0f, 295.6f };
+  if (argCameraX) 
+    cameraPos[0] = args::get(argCameraX);
+  if (argCameraY) 
+    cameraPos[1] = args::get(argCameraY);
+  if (argCameraZ) 
+    cameraPos[2] = args::get(argCameraZ);
+  float cameraView[2] = {-90.0f, 0.0f};
+  if (argViewYaw)
+    cameraView[0] = args::get(argViewYaw);
+  if (argViewPitch)
+    cameraView[1] = args::get(argViewPitch);
 
   std::string outputName = (argOutput) ? args::get(argOutput) : "output/out";
   std::cout << "cuda-pathtrace 0.2" << std::endl;
@@ -67,7 +85,7 @@ int main(int argc, const char** argv) {
   Scene scene;
   Renderer renderer(width, height, samplesPerPixel, threadsPerBlock);
   Denoiser denoiser(width, height, threadsPerBlock);
-  Camera camera(glm::vec3(50, 52, 295.6));
+  Camera camera(glm::make_vec3(cameraPos), cameraView[0], cameraView[1]);
   
   if (argIteractive) {
     // interactive (realtime) mode
@@ -94,7 +112,7 @@ int main(int argc, const char** argv) {
     buffer.CopyFromGPU(renderer.d_buffer);
     buffer.SaveEXR(outputName);
     if(!argNoBitmaps)
-      buffer.SaveBitmaps(outputName);
+      buffer.SaveBitmaps(outputName+".exr");
     buffer.FreeCPU();
   }
   

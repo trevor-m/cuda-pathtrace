@@ -6,7 +6,7 @@
 #include <GL/glu.h>
 #include <GLFW/glfw3.h>
 #include "Camera.h"
-
+#include <iostream>
 
 void errorCallback(int error, const char* description)
 {
@@ -46,6 +46,7 @@ public:
     // create window
     window = glfwCreateWindow(width, height, "cuda-pathtrace", nullptr, nullptr);
     glfwMakeContextCurrent(window);
+    glfwSetWindowPos(window, 100, 100);
 
     // turn on GLEW
     glewExperimental = GL_TRUE;
@@ -150,6 +151,11 @@ public:
     // closing the application
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
       glfwSetWindowShouldClose(window, GL_TRUE);
+
+    if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) {
+      Window* w = (Window*)glfwGetWindowUserPointer(window);
+      std::cout << w->camera->Position.x << " " << w->camera->Position.y << " " << w->camera->Position.z << " - " << w->camera->Yaw << " " << w->camera->Pitch << " " << std::endl;
+    }
 
     if (key >= 0 && key < 1024) {
       Window* w = (Window*)glfwGetWindowUserPointer(window);
