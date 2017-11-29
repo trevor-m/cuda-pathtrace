@@ -90,3 +90,4 @@ You will need to install the [OpenEXR python bindings](http://www.excamera.com/s
 * [tinyexr](https://github.com/syoyo/tinyexr) - Saving OpenEXR files
 * [stbimage](https://github.com/nothings/stb) - Saving bitmaps
 * [args](https://github.com/Taywee/args) - Parsing command line arguments
+* Cornell box scene from http://www.kevinbeason.com/smallpt/
