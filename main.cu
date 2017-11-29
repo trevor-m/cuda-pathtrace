@@ -113,9 +113,9 @@ int main(int argc, const char** argv) {
     OutputBuffer buffer(width, height);
     buffer.AllocateCPU();
     buffer.CopyFromGPU(renderer.d_buffer);
-    buffer.SaveEXR(outputName);
+    buffer.SaveEXR(outputName+".exr");
     if(!argNoBitmaps)
-      buffer.SaveBitmaps(outputName+".exr");
+      buffer.SaveBitmaps(outputName);
     buffer.FreeCPU();
   }
   
