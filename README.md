@@ -1,5 +1,4 @@
-![render](https://user-images.githubusercontent.com/12981474/32823079-768c3b56-c990-11e7-85d5-9b55fcb8572e.png)
-# cuda-pathtrace
+![render](https://user-images.githubusercontent.com/12981474/33522069-3971c39c-d798-11e7-8d2b-3825c35ae012.png)
 
 cuda-pathtrace is a realtime photorealistic pathtracer implemented in CUDA. It can currently only render diffuse surfaces and scenes containing spheres.
 
