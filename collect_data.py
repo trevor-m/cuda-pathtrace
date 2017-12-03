@@ -1,6 +1,7 @@
 import random
 import argparse
 import numpy as np
+import os
 from subprocess import call
 
 
@@ -21,6 +22,9 @@ def main():
   parser.add_argument('--samples-gt', type=int, default=20000, help='Samples per pixel for ground truth images')
   args = parser.parse_args()
 
+  if not os.path.exists('data'):
+    os.makedirs('data')
+
   data = np.loadtxt(args.list)
   for i in range(data.shape[0]):
     # randomize camera
@@ -28,10 +32,10 @@ def main():
 
     # training data
     output_path = 'data/' + str(i) + '_train'
-    call(['./pathtrace', '--nobitmap', '-s', str(args.samples_train), '-x', str(x), '-y', str(y), '-z', str(z), '--camera-yaw', str(yaw), '--camera-pitch', str(pitch), '-o', output_path])
+    call(['./pathtrace', '-d', '1', '--nobitmap', '-s', str(args.samples_train), '-x', str(x), '-y', str(y), '-z', str(z), '--camera-yaw', str(yaw), '--camera-pitch', str(pitch), '-o', output_path])
     # ground truth
     output_path = 'data/' + str(i) + '_gt'
-    call(['./pathtrace', '--nobitmap', '-s', str(args.samples_gt), '-x', str(x), '-y', str(y), '-z', str(z), '--camera-yaw', str(yaw), '--camera-pitch', str(pitch), '-o', output_path])
+    call(['./pathtrace', '-d', '1', '--nobitmap', '-s', str(args.samples_gt), '-x', str(x), '-y', str(y), '-z', str(z), '--camera-yaw', str(yaw), '--camera-pitch', str(pitch), '-o', output_path])
 
 
 
