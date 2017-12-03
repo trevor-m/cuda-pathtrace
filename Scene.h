@@ -21,6 +21,7 @@ public:
 
   Scene() {
     numObjects = 9;
+    // Scene source: http://www.kevinbeason.com/smallpt/
     Sphere spheres[] = {
       { 1e5f, { 1e5f + 1.0f, 40.8f, 81.6f }, { 0.0f, 0.0f, 0.0f }, { 0.75f, 0.25f, 0.25f } }, //Left 
       { 1e5f, { -1e5f + 99.0f, 40.8f, 81.6f }, { 0.0f, 0.0f, 0.0f }, { .25f, .25f, .75f } }, //Right 
