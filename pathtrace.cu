@@ -167,8 +167,11 @@ __device__ void trace_ray(TraceOutput& L, const Scene& scene, Ray ray, curandSta
     
     // direct lighting
     //color += mask * getDirectLighting(scene, normal, pos) * scene.objects[hitData.index].color * 0.5f;
-
-    color += mask * scene.objects[hitData.index].emission;
+    // hack for aliasing issue with bright light source
+    if (n == 0)
+      color += clamp(mask * scene.objects[hitData.index].emission, 0.0, 1.0);
+    else
+      color += mask * scene.objects[hitData.index].emission;
     mask *= scene.objects[hitData.index].color;
     
     // create next ray
