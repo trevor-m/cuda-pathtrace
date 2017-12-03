@@ -34,7 +34,7 @@ To launch cuda-pathtrace in interactive (real-time) mode, use:
 ./pathtrace -i
 ```
 
-To render cuda-pathtrace accepts the following arguments. The output file <output name>.exr will be created with the results of your render.
+To render single frames, cuda-pathtrace accepts the following arguments. The output file <output name>.exr will be created with the results of your render.
 
 ```
   ./pathtrace {OPTIONS}
@@ -75,7 +75,7 @@ To load the rendered image and features from the EXR file, the python code in `d
 ```python
 from load_data import load_exr_data
 
-x = load_exr_data("output.exr")
+x = load_exr_data("output.exr", preprocess=True)
 ```
 
 You will need to install the [OpenEXR python bindings](http://www.excamera.com/sphinx/articles-openexr.html). If you are Windows, I recommened installing from an unofficial [precompiled binary](https://www.lfd.uci.edu/~gohlke/pythonlibs/#openexr) - it will make your life 10x easier.
