@@ -1,4 +1,4 @@
-![render](https://user-images.githubusercontent.com/12981474/32823079-768c3b56-c990-11e7-85d5-9b55fcb8572e.png)
+![render](https://user-images.githubusercontent.com/12981474/33522069-3971c39c-d798-11e7-8d2b-3825c35ae012.png)
 # cuda-pathtrace
 
 cuda-pathtrace is a realtime photorealistic pathtracer implemented in CUDA. It can currently only render diffuse surfaces and scenes containing spheres.
@@ -35,7 +35,7 @@ To launch cuda-pathtrace in interactive (real-time) mode, use:
 ./pathtrace -i
 ```
 
-To render cuda-pathtrace accepts the following arguments. The output file <output name>.exr will be created with the results of your render.
+To render single frames, cuda-pathtrace accepts the following arguments. The output file <output name>.exr will be created with the results of your render.
 
 ```
   ./pathtrace {OPTIONS}
@@ -76,10 +76,10 @@ To load the rendered image and features from the EXR file, the python code in `d
 ```python
 from load_data import load_exr_data
 
-x = load_exr_data("output.exr")
+x = load_exr_data("output.exr", preprocess=True)
 ```
 
-You will need to install the [OpenEXR python bindings](http://www.excamera.com/sphinx/articles-openexr.html). If you are Windows, I recommened installing from an unofficial [precompiled binary](https://www.lfd.uci.edu/~gohlke/pythonlibs/#openexr) - it will make your life 10x easier.
+You will need to install the [OpenEXR python bindings](http://www.excamera.com/sphinx/articles-openexr.html). If you are using Windows, I recommened installing from an unofficial [precompiled binary](https://www.lfd.uci.edu/~gohlke/pythonlibs/#openexr) - it will make your life 10x easier.
 
 ## Built With
 * C++
