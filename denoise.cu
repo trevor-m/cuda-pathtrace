@@ -13,7 +13,7 @@ __global__ void denoise_kernel(OutputBuffer input, float* d_output) {
   if (x >= input.width || y >= input.height)
     return;
 
-  float3 color = make_float3(input.color[x*input.width*3 + y*3 + 0], input.color[x*input.width*3 + y*3 + 1], input.color[x*input.width*3 + y*3 + 2]);
+  float3 color = make_float3(input.buffer[x*input.width*14 + y*14 + 0], input.buffer[x*input.width*14 + y*14 + 1], input.buffer[x*input.width*14 + y*14 + 2]);
   // clamp to range 0-1
   color.x = min(max(color.x, 0.0f), 1.0f);
   color.y = min(max(color.y, 0.0f), 1.0f);

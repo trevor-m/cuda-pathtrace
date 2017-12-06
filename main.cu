@@ -13,6 +13,69 @@
 #include "stb_image_write.h"
 
 
+#include <boost/filesystem.hpp>
+#include <boost/python.hpp>
+
+namespace py = boost::python;
+namespace fs = boost::filesystem;
+
+struct PythonState {
+    py::object main_module;
+    py::object globals;
+
+    PythonState()
+        : main_module(py::object(
+              py::handle<>(py::borrowed(PyImport_AddModule("__main__")))))
+    {
+        globals = main_module.attr("__dict__");
+    }
+
+    py::object import(const std::string& module_path)
+    {
+        return _import(fs::path(module_path));
+    }
+
+    py::object _import(const fs::path& module_path)
+    {
+        try {
+            py::dict locals;
+            locals["mname"] = module_path.stem().string();
+            locals["filename"] = module_path.string();
+            py::exec("import importlib.util\n"
+                     "spec = importlib.util.spec_from_file_location(mname, "
+                     "filename)\n"
+                     "imported = importlib.util.module_from_spec(spec)\n"
+                     "spec.loader.exec_module(imported)",
+                globals, locals);
+            return locals["imported"];
+        } catch (py::error_already_set& err) {
+            PyErr_Print();
+        }
+        return py::object();
+    }
+
+    py::object exec(const char* code, py::dict& locals)
+    {
+        try {
+            return py::exec(code, globals, locals);
+        } catch (py::error_already_set& err) {
+            PyErr_Print();
+        }
+        return py::object();
+    }
+
+    py::object exec(const char* code)
+    {
+        try {
+            return py::exec(code, globals, globals);
+        } catch (py::error_already_set& err) {
+            PyErr_Print();
+        }
+        return py::object();
+    }
+};
+
+
 int main(int argc, const char** argv) {
   // set up argument parser
   args::ArgumentParser parser("cuda-pathtrace");
@@ -66,7 +129,7 @@ int main(int argc, const char** argv) {
     cameraView[0] = args::get(argViewYaw);
   if (argViewPitch)
     cameraView[1] = args::get(argViewPitch);
-
+  bool denoising = true;
   std::string outputName = (argOutput) ? args::get(argOutput) : "output/out";
   std::cout << "cuda-pathtrace 0.2" << std::endl;
   std::cout << "------------------" << std::endl;
@@ -83,12 +146,57 @@ int main(int argc, const char** argv) {
   //if (argIteractive)
   //   gpuErrchk(cudaGLSetGLDevice(cudaDevice));
 
-  // create renderer
+  Py_Initialize();
+  PyEval_InitThreads();
+  long _tensor_ptr = -1;
+  py::dict locals;
+  PythonState state;
+
+  state.exec("import torch\n"
+              "def make_tensor():\n"
+              "    return torch.cuda.FloatTensor(512, 512, 14)\n"
+              "def modify_tensor(tensor):\n"
+              "    tensor[:, :, 0] = 1.0");
+
+  py::object torch = state.globals["torch"];
+
+  py::object make_tensor = state.globals["make_tensor"];
+  py::object modify_tensor = state.globals["modify_tensor"];
+
+  py::object tensor = make_tensor();
+
+  locals["t"] = tensor;
+
+  state.exec("data_ptr = t.data_ptr()", locals);
+
+  _tensor_ptr = py::extract<long>(locals["data_ptr"]);
+
+  std::cout << "init torch.cuda.FloatTensor=" << _tensor_ptr
+            << std::endl;
+
+  if (_tensor_ptr < 0) {
+      return 0;
+  }
+
+  void* tensor_ptr = reinterpret_cast<void*>(_tensor_ptr);
+
+  // load scene and create renderer
   Scene scene;
   Renderer renderer(width, height, samplesPerPixel, threadsPerBlock);
   Denoiser denoiser(width, height, threadsPerBlock);
   Camera camera(glm::make_vec3(cameraPos), cameraView[0], cameraView[1]);
   
+  // allocate output buffer
+  OutputBuffer d_buffer(width, height);
+  if (true) {
+    // torch tensor
+    d_buffer.buffer = (float*)tensor_ptr;
+  }
+  else {
+    // regular cuda memory
+    d_buffer.AllocateGPU();
+  }
+
   if (argInteractive) {
     // interactive (realtime) mode
     Window window(width, height, &camera);
@@ -96,23 +204,22 @@ int main(int argc, const char** argv) {
 
     while(!window.ShouldClose()) {
       window.DoMovement();
-      renderer.Render(scene, camera);
-      //cudaThreadSynchronize();
-      denoiser.Denoise(renderer.d_buffer, denoisedBuffer);
-      //cudaThreadSynchronize();
+      renderer.Render(d_buffer, scene, camera);
+      modify_tensor(tensor);
+      denoiser.Denoise(d_buffer, denoisedBuffer);
       window.DrawToScreen(denoisedBuffer);
     }
   }
   else {
     // data collection (single frame render) mode
     // render frame
-    float renderTime = renderer.Render(scene, camera);
+    float renderTime = renderer.Render(d_buffer, scene, camera);
     std::cout << "Render completed in " << renderTime << "ms (" << 1000.0f/renderTime << " fps)" << std::endl;
     std::cout << std::endl;
     // save results
     OutputBuffer buffer(width, height);
     buffer.AllocateCPU();
-    buffer.CopyFromGPU(renderer.d_buffer);
+    buffer.CopyFromGPU(d_buffer);
     buffer.SaveEXR(outputName+".exr");
     if(!argNoBitmaps)
       buffer.SaveBitmaps(outputName);

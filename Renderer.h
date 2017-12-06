@@ -20,9 +20,6 @@ private:
   float3* d_eyePos;
 
 public:
-  // feature buffers
-  OutputBuffer d_buffer;
-
   Renderer(int width, int height, int samplesPerPixel, int numThreads) {
     this->width = width;
     this->height = height;
@@ -43,19 +40,19 @@ public:
     gpuErrchk(cudaMalloc(&d_eyeRayBasis, 4*sizeof(float3)));
     gpuErrchk(cudaMalloc(&d_eyePos, sizeof(float3)));
     // buffers
-    d_buffer.width = width;
-    d_buffer.height = height;
-    d_buffer.AllocateGPU();
+    //d_buffer.width = width;
+    //d_buffer.height = height;
+    //d_buffer.AllocateGPU();
   }
 
   ~Renderer() {
-    d_buffer.FreeGPU();
+    //d_buffer.FreeGPU();
     cudaFree(d_states);
     cudaFree(d_eyeRayBasis);
     cudaFree(d_eyePos);
   }
 
-  float Render(const Scene& d_scene, const Camera& camera) {
+  float Render(OutputBuffer d_buffer, const Scene& d_scene, const Camera& camera) {
     // copy camera information to device
     float3 eyeRayBasis[4];
     camera.getEyeRayBasis(eyeRayBasis, width, height);

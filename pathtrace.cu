@@ -237,21 +237,21 @@ __global__ void pixel_kernel(OutputBuffer output, curandState* randStates, Scene
   L.depth /= (float)spp;
   
   // write to output buffer
-  output.color[x*output.width*3 + y*3 + 0] = L.color.x;
-  output.color[x*output.width*3 + y*3 + 1] = L.color.y;
-  output.color[x*output.width*3 + y*3 + 2] = L.color.z;
-  output.normal[x*output.width*3 + y*3 + 0] = L.normal.x;
-  output.normal[x*output.width*3 + y*3 + 1] = L.normal.y;
-  output.normal[x*output.width*3 + y*3 + 2] = L.normal.z;
-  output.albedo[x*output.width*3 + y*3 + 0] = L.albedo.x;
-  output.albedo[x*output.width*3 + y*3 + 1] = L.albedo.y;
-  output.albedo[x*output.width*3 + y*3 + 2] = L.albedo.z;
-  output.depth[x*output.width + y] = L.depth;
+  output.buffer[x*output.width*14 + y*14 + 0] = L.color.x;
+  output.buffer[x*output.width*14 + y*14 + 1] = L.color.y;
+  output.buffer[x*output.width*14 + y*14 + 2] = L.color.z;
+  output.buffer[x*output.width*14 + y*14 + 3] = L.normal.x;
+  output.buffer[x*output.width*14 + y*14 + 4] = L.normal.y;
+  output.buffer[x*output.width*14 + y*14 + 5] = L.normal.z;
+  output.buffer[x*output.width*14 + y*14 + 6] = L.albedo.x;
+  output.buffer[x*output.width*14 + y*14 + 7] = L.albedo.y;
+  output.buffer[x*output.width*14 + y*14 + 8] = L.albedo.z;
+  output.buffer[x*output.width*14 + y*14 + 9] = L.depth;
   // get final variances
-  output.color_var[x*output.width + y] = var.getVariance(Features::COLOR);
-  output.normal_var[x*output.width + y] = var.getVariance(Features::NORMAL);
-  output.albedo_var[x*output.width + y] = var.getVariance(Features::ALBEDO);
-  output.depth_var[x*output.width + y] = var.getVariance(Features::DEPTH);
+  output.buffer[x*output.width*14 + y*14 + 10] = var.getVariance(Features::COLOR);
+  output.buffer[x*output.width*14 + y*14 + 11] = var.getVariance(Features::NORMAL);
+  output.buffer[x*output.width*14 + y*14 + 12] = var.getVariance(Features::ALBEDO);
+  output.buffer[x*output.width*14 + y*14 + 13] = var.getVariance(Features::DEPTH);
   // copy rand state back to global memory
   randStates[id] = localRandState;
 }
