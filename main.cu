@@ -5,7 +5,7 @@
 #include "Scene.h"
 #include <iostream>
 #include <string>
-#include "args.hxx"
+#include <cstdlib>
 
 #define TINYEXR_IMPLEMENTATION
 #include "tinyexr.h"
@@ -77,66 +77,24 @@ struct PythonState {
 
 
 int main(int argc, const char** argv) {
-  // set up argument parser
-  args::ArgumentParser parser("cuda-pathtrace");
-  parser.LongSeparator(" ");
-  args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
-  args::ValueFlag<int> argWidth(parser, "w", "Image/window width (default 512)", {'w', "width"});
-  args::ValueFlag<int> argSamples(parser, "samples", "Number of samples per pixel (default 4)", {'s', "samples"});
-  args::ValueFlag<int> argDevice(parser, "device", "Which CUDA device to use (default 0)", {'d', "device"});
-  args::ValueFlag<int> argThreads(parser, "threads", "Number of threads per block (default 8)", {'t', "threads-per-block"});
-  args::ValueFlag<float> argCameraX(parser, "x", "Starting camera position x", {'x', "camera-x"});
-  args::ValueFlag<float> argCameraY(parser, "y", "Starting camera position y", {'y', "camera-y"});
-  args::ValueFlag<float> argCameraZ(parser, "z", "Starting camera position z", {'z', "camera-z"});
-  args::ValueFlag<float> argViewYaw(parser, "yaw", "Starting camera view yaw", {'c', "camera-yaw"});
-  args::ValueFlag<float> argViewPitch(parser, "pitch", "Starting camera view pitch", {'p', "camera-pitch"});
-  args::ValueFlag<std::string> argOutput(parser, "path", "Prefix of output file name(s) (default output/output)", {'o', "output"});
-  args::Flag argNoBitmaps(parser, "nobitmap", "Do not output bitmap features - only the exr", {'n', "nobitmap"});
-  args::Flag argInteractive(parser, "interactive", "Open in interactive mode  - will only render a single frame if not set", {'i', "interactive"});
-  try {
-    parser.ParseCLI(argc, argv);
-  }
-  catch (args::Help) {
-    std::cout << parser;
-    return 0;
-  }
-  catch (args::ParseError e) {
-    std::cerr << e.what() << std::endl;
-    std::cerr << parser;
-    return 1;
-  }
-  catch (args::ValidationError e) {
-    std::cerr << e.what() << std::endl;
-    std::cerr << parser;
-    return 1;
-  }
   //get arguments
-  int width = (argWidth) ? args::get(argWidth) : 512;
+  int width =  512;
   int height = width;
-  int threadsPerBlock = (argThreads) ? args::get(argThreads) : 8;
-  int samplesPerPixel = (argSamples) ? args::get(argSamples) : 4;
-  int cudaDevice = (argDevice) ? args::get(argDevice) : 0;
+  int threadsPerBlock = 8;
+  int samplesPerPixel = 2;
+  int cudaDevice = 0;
   // camera arguments
   float cameraPos[3] = { 50.0f, 52.0f, 295.6f };
-  if (argCameraX) 
-    cameraPos[0] = args::get(argCameraX);
-  if (argCameraY) 
-    cameraPos[1] = args::get(argCameraY);
-  if (argCameraZ) 
-    cameraPos[2] = args::get(argCameraZ);
   float cameraView[2] = {-90.0f, 0.0f};
-  if (argViewYaw)
-    cameraView[0] = args::get(argViewYaw);
-  if (argViewPitch)
-    cameraView[1] = args::get(argViewPitch);
   bool denoising = true;
-  std::string outputName = (argOutput) ? args::get(argOutput) : "output/out";
+  std::string outputName = "output/out";
   std::cout << "cuda-pathtrace 0.2" << std::endl;
   std::cout << "------------------" << std::endl;
   std::cout << "Dimensions: " << width << " x " << height << std::endl;
   std::cout << "Threads per block: " << threadsPerBlock << std::endl;
   std::cout << "Samples per pixel: " << samplesPerPixel << std::endl;
   std::cout << "Using CUDA device: " << cudaDevice << std::endl;
+  bool argInteractive = true;
   if (!argInteractive)
     std::cout << "Output file prefix: " << outputName << std::endl;
   std::cout << "Camera: " << cameraPos[0] << " " << cameraPos[1] << " " << cameraPos[2] << " " << cameraView[0] << " " << cameraView[1] << std::endl;
@@ -146,20 +104,25 @@ int main(int argc, const char** argv) {
   //if (argIteractive)
   //   gpuErrchk(cudaGLSetGLDevice(cudaDevice));
 
+  setenv("PYTHONPATH", "./denoise_cnn", 1);
+
   Py_Initialize();
   PyEval_InitThreads();
   long _tensor_ptr = -1;
   py::dict locals;
   PythonState state;
-
+  //py::object attributeError = state.import("exceptions").attr("AttributeError");
   state.exec("import torch\n"
+              "from train import test, load_pretrained\n"
+              "model = load_pretrained()\n"
               "def make_tensor():\n"
               "    return torch.cuda.FloatTensor(512, 512, 14)\n"
               "def modify_tensor(tensor):\n"
-              "    tensor[:, :, 0] = 1.0");
+              "    tensor[:,:,:3] = test(model, tensor)[:, :, :]\n"
+            );
 
   py::object torch = state.globals["torch"];
-
+  py::object attributeError = py::import("exceptions").attr("AttributeError");
   py::object make_tensor = state.globals["make_tensor"];
   py::object modify_tensor = state.globals["modify_tensor"];
 
@@ -205,7 +168,31 @@ int main(int argc, const char** argv) {
     while(!window.ShouldClose()) {
       window.DoMovement();
       renderer.Render(d_buffer, scene, camera);
-      modify_tensor(tensor);
+      try {
+        modify_tensor(tensor);
+      }
+      catch (const py::error_already_set&) {
+        PyObject *ptype, *pvalue, *ptraceback;
+        PyErr_Fetch(&ptype, &pvalue, &ptraceback);
+
+        py::handle<> hType(ptype);
+        py::object extype(hType);
+        py::handle<> hTraceback(ptraceback);
+        py::object traceback(hTraceback);
+
+        //Extract error message
+        std::string strErrorMessage = py::extract<std::string>(pvalue);
+
+        //Extract line number (top entry of call stack)
+        // if you want to extract another levels of call stack
+        // also process traceback.attr("tb_next") recurently
+        long lineno =py::extract<long> (traceback.attr("tb_lineno"));
+        std::string filename = py::extract<std::string>(traceback.attr("tb_frame").attr("f_code").attr("co_filename"));
+        std::string funcname = py::extract<std::string>(traceback.attr("tb_frame").attr("f_code").attr("co_name"));
+        std::cout << strErrorMessage << std::endl << "line: " << lineno << std::endl;
+        std::cout << filename << " " << funcname << std::endl;
+      }
+
       denoiser.Denoise(d_buffer, denoisedBuffer);
       window.DrawToScreen(denoisedBuffer);
     }
@@ -221,8 +208,7 @@ int main(int argc, const char** argv) {
     buffer.AllocateCPU();
     buffer.CopyFromGPU(d_buffer);
     buffer.SaveEXR(outputName+".exr");
-    if(!argNoBitmaps)
-      buffer.SaveBitmaps(outputName);
+    buffer.SaveBitmaps(outputName);
     buffer.FreeCPU();
   }
   
