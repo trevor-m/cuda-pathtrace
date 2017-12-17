@@ -188,7 +188,7 @@ int main(int argc, const char** argv) {
   
   // allocate output buffer
   OutputBuffer d_buffer(width, height);
-  if (true) {
+  if (denoising) {
     // torch tensor
     d_buffer.buffer = (float*)tensor_ptr;
   }
