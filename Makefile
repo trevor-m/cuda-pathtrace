@@ -1,18 +1,18 @@
 NVCC=/usr/local/cuda/bin/nvcc
-NVFLAGS=-arch compute_30 -ccbin clang++-3.8
-CUDAFLAGS=-I/usr/local/cuda/include -I/usr/local/cuda/samples/common/inc -I/usr/include/python2.7
+NVFLAGS=-arch compute_30
+CUDAFLAGS=-I include -I/usr/local/cuda/include -I/usr/local/cuda/samples/common/inc -I/usr/include/python2.7
 LDLIBS=-lglfw -lGL -lX11 -lpthread -lXrandr -lXi -lGLEW -lGLU -lpython2.7 -lboost_system -lboost_python
 
 pathtrace: pathtrace.o main.o denoise.o
 	$(NVCC) $^ -o $@ $(LDLIBS) $(NVFLAGS)
 
-pathtrace.o: pathtrace.cu
+pathtrace.o: src/pathtrace.cu
 	$(NVCC) $(CUDAFLAGS) -c $^ $(NVFLAGS)
 
-denoise.o: denoise.cu
+denoise.o: src/denoise.cu
 	$(NVCC) $(CUDAFLAGS) -c $^ $(NVFLAGS)
 
-main.o: main.cu
+main.o: src/main.cu
 	$(NVCC) $(CUDAFLAGS) -c $^ $(NVFLAGS)
 	
 clean:
