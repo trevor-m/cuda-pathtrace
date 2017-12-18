@@ -19,7 +19,7 @@ def load_exr_data(filename, preprocess=False, concat=False, target=False):
 
   # preprocess
   if preprocess:
-    color = np.clip(color, 0, 1)
+    #color = np.clip(color, 0, 1)
     depth /= np.max(depth)
     depth_var /= np.max(depth_var)
     albedo_var /= np.max(albedo_var)
@@ -70,9 +70,9 @@ def save_exr_data(filename, data):
 
 def get_patches(filename, gt_filename, patch_size=64, num_patches=200, preprocess=False):
   data = load_exr_data(filename, preprocess=preprocess, concat=True)
-  gt = load_exr_data(gt_filename, preprocess=preprocess)[0]
-  w = data.shape[0]
-  h = data.shape[1]
+  gt = load_exr_data(gt_filename, preprocess=preprocess, concat=True, target=True)
+  w = data.shape[1] # swapped for pytorch
+  h = data.shape[2]
 
   candidate_patches = []
   candidate_patches_gt = []
@@ -82,8 +82,8 @@ def get_patches(filename, gt_filename, patch_size=64, num_patches=200, preproces
     # pick random point to be the top-left corner of patch
     x = random.randint(0, w-patch_size-1)
     y = random.randint(0, h-patch_size-1)
-    patch = data[x:x+patch_size, y:y+patch_size, :]
-    patch_gt = gt[x:x+patch_size, y:y+patch_size, :]
+    patch = data[:, x:x+patch_size, y:y+patch_size]
+    patch_gt = gt[:, x:x+patch_size, y:y+patch_size]
     score = get_score(patch)
 
     candidate_patches.append(patch)
@@ -93,11 +93,12 @@ def get_patches(filename, gt_filename, patch_size=64, num_patches=200, preproces
 
   patches = []
   patches_gt = []
+  sanity = 0
   while len(patches) < num_patches:
     for i, patch in enumerate(candidate_patches):
       # probability of picking this patch is score/total_score
       p_pick = candidate_patch_scores[i] / total_score
-      if random.random() < p_pick:
+      if random.random() < p_pick or sanity > num_patches*10:
         # pick this patch and remove it from pool
         patches.append(patch)
         patches_gt.append(candidate_patches_gt[i])
@@ -105,12 +106,13 @@ def get_patches(filename, gt_filename, patch_size=64, num_patches=200, preproces
         del candidate_patches_gt[i]
         del candidate_patches[i]
         break
+      sanity += 1
 
-  return np.array(patches), np.array(patches_gt)
+  return patches, patches_gt
 
 def get_score(patch):
   # score is total color variance + total normal variance
-    return np.sum(patch[:, :, 10]) + np.sum(patch[:, :, 11])
+    return np.sum(patch[10:, :, :]) + np.sum(patch[11, :, :])
 
 if __name__ == "__main__":
   print("Testing load_exr_data")

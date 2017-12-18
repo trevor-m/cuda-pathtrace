@@ -2,6 +2,7 @@ from __future__ import print_function
 from math import log10
 import time
 import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 import torch
 import torch.nn as nn
@@ -25,24 +26,27 @@ def train(epoch):
         loss.backward()
         optimizer.step()
 
-    print("===> Epoch {} Complete: Avg. Loss: {:.4f}".format(epoch, epoch_loss / len(training_data_loader)))
+    print("===> Epoch {} Complete: Avg. Loss: {:.7f}".format(epoch, epoch_loss / len(training_data_loader)))
     scheduler.step(epoch_loss / len(training_data_loader))
     return input, prediction
 
 def validate():
     avg_psnr = 0
+    avg_loss = 0
     for (input, target) in testing_data_loader:
         input, target = Variable(input).cuda(), Variable(target).cuda()
         prediction = model(input)
         mse = criterion(prediction, target)
+        avg_loss += mse.data[0]
         psnr = 10 * log10(1 / mse.data[0])
         avg_psnr += psnr
 
-    print("===> Avg. PSNR: {:.4f} dB".format(avg_psnr / len(testing_data_loader)))
+    print("===> Avg. Loss: {:.7f}, Avg. PSNR: {:.4f} dB".format(avg_loss/len(testing_data_loader), avg_psnr / len(testing_data_loader)))
+    return input, prediction, target
 
 def test(model, boost_tensor):
     # preprocess
-    boost_tensor[:, :, :3] = torch.clamp(boost_tensor[:, :, :3], 0, 1)
+    #boost_tensor[:, :, :3] = torch.clamp(boost_tensor[:, :, :3], 0, 1)
     boost_tensor[:, :, 9] /=  torch.max(boost_tensor[:, :, 9])
     boost_tensor[:, :, 10] /=  torch.max(boost_tensor[:, :, 10])
     boost_tensor[:, :, 11] /=  torch.max(boost_tensor[:, :, 11])
@@ -77,21 +81,23 @@ if __name__ == "__main__":
 
     print('===> Building model')
     model = DenoiseCNN().cuda()
-    criterion = nn.L1Loss().cuda()
+    #criterion = nn.L1Loss().cuda()
+    criterion = nn.MSELoss().cuda()
     optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9, dampening=0, weight_decay=0, nesterov=True)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=5000, verbose=True, threshold=1e-4)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=500, verbose=True, threshold=1e-4)
 
     time_str = str(int(time.time()))[2::]
     base_dir = "results/" + time_str
 
     for epoch in range(1, 400001):
         input, prediction = train(epoch)
-        if epoch % 1000 == 0:
+        if epoch % 50 == 0:
             if not os.path.exists(base_dir):
                 os.mkdir(base_dir)
+            _, prediction, target = validate()
             prediction = np.swapaxes(prediction.cpu().data.numpy()[0], 0, 2)
-            input = np.swapaxes(input.cpu().data.numpy()[0], 0, 2)
-            plt.imsave("{}/in{}.png".format(base_dir, epoch), np.clip(input[:, :, :3], 0, 1))
-            plt.imsave("{}/out{}.png".format(base_dir, epoch), np.clip(prediction, 0, 1))
+            target = np.swapaxes(target.cpu().data.numpy()[0], 0, 2)
+            plt.imsave("{}/{}_gt.png".format(base_dir, epoch), np.clip(target[:, :, :3], 0, 1))
+            plt.imsave("{}/{}_out.png".format(base_dir, epoch), np.clip(prediction, 0, 1))
             checkpoint(base_dir)
         #validate()
