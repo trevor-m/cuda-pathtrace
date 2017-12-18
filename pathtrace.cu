@@ -189,15 +189,15 @@ __device__ void trace_ray(TraceOutput& L, const Scene& scene, Ray ray, curandSta
       L.albedo += scene.objects[hitData.index].color;
       L.depth += hitData.t;
       // update variances
-      var.updateVariance(luminance(normal), Features::NORMAL);
-      var.updateVariance(luminance(scene.objects[hitData.index].color), Features::ALBEDO);
-      var.updateVariance(hitData.t, Features::DEPTH);
+      var.updateVariance(luminance(normal), NORMAL);
+      var.updateVariance(luminance(scene.objects[hitData.index].color), ALBEDO);
+      var.updateVariance(hitData.t, DEPTH);
     }
   }
 
   L.color += color;
   // update color variance with final sample color
-  var.updateVariance(luminance(color), Features::COLOR);
+  var.updateVariance(luminance(color), COLOR);
 }
 
 __global__ void pixel_kernel(OutputBuffer output, curandState* randStates, Scene scene, float3* rayBasis, float3* eyePos, int spp) {
@@ -248,10 +248,10 @@ __global__ void pixel_kernel(OutputBuffer output, curandState* randStates, Scene
   output.buffer[x*output.width*14 + y*14 + 8] = L.albedo.z;
   output.buffer[x*output.width*14 + y*14 + 9] = L.depth;
   // get final variances
-  output.buffer[x*output.width*14 + y*14 + 10] = var.getVariance(Features::COLOR);
-  output.buffer[x*output.width*14 + y*14 + 11] = var.getVariance(Features::NORMAL);
-  output.buffer[x*output.width*14 + y*14 + 12] = var.getVariance(Features::ALBEDO);
-  output.buffer[x*output.width*14 + y*14 + 13] = var.getVariance(Features::DEPTH);
+  output.buffer[x*output.width*14 + y*14 + 10] = var.getVariance(COLOR);
+  output.buffer[x*output.width*14 + y*14 + 11] = var.getVariance(NORMAL);
+  output.buffer[x*output.width*14 + y*14 + 12] = var.getVariance(ALBEDO);
+  output.buffer[x*output.width*14 + y*14 + 13] = var.getVariance(DEPTH);
   // copy rand state back to global memory
   randStates[id] = localRandState;
 }

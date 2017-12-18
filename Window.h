@@ -44,7 +44,7 @@ public:
     glfwSetErrorCallback(errorCallback);
 
     // create window
-    window = glfwCreateWindow(width, height, "cuda-pathtrace", nullptr, nullptr);
+    window = glfwCreateWindow(width, height, "cuda-pathtrace", 0, 0);
     glfwMakeContextCurrent(window);
     glfwSetWindowPos(window, 100, 100);
 
