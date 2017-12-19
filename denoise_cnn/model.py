@@ -110,7 +110,8 @@ class DenoiseCNN(nn.Module):
         rep = self._upsample_add(rep, self.relu(self.lat_0(x)))
         
         rep = self.rgb_conv(rep)
-        return torch.clamp(rep, 0, 1)
+        # multiply albedo back in and clamp
+        return torch.clamp(rep * (0.00316 + x[:, 6:9, :, :]), 0, 1)
 
     def _initialize_weights(self):
         for m in self.modules():
