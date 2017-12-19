@@ -22,6 +22,9 @@ You will need the following in order to build the application:
   * Run `make`
   * Run `sudo make install`
   * Copy /usr/local/lib/libglfw.so.3 to your cuda-pathtrace repo, or add /usr/local/lib/ to your LD_LIBRARY_PATH
+* Boost (boost_python, boost_program_options, boost_system)
+* Python 2.7
+* Pytorch for Python 2.7 and CUDA 8.0
 
 ### Compiling
 
@@ -29,40 +32,32 @@ Type `make` to build the application (Tested on Ubuntu 16.04).
 
 ## Usage
 
-To launch cuda-pathtrace in interactive (real-time) mode, use:
+To launch cuda-pathtrace in interactive (real-time) mode with denoising enabled, use:
 
 ```
-./pathtrace -i
+./pathtrace -i -d
 ```
 
 To render single frames, cuda-pathtrace accepts the following arguments. The output file <output name>.exr will be created with the results of your render.
 
 ```
-  ./pathtrace {OPTIONS}
-
-    cuda-pathtrace
-
-  OPTIONS:
-
-      -h, --help                        Display this help menu
-      -w [w], --width [w]                Image/window width and height (default 512)
-      -s [samples], --samples [samples]  Number of samples per pixel (default 4)
-      -d [device], --device [device]     Which CUDA device to use (default 0)
-      -t [threads], --threads-per-block [threads]                         
-                                         Number of threads per block (default 8)
-      -x [x], --camera-x [x]             Starting camera position x
-      -y [y], --camera-y [y]             Starting camera position y
-      -z [z], --camera-z [z]             Starting camera position z
-      -c [yaw], --camera-yaw [yaw]       Starting camera view yaw
-      -p [pitch], --camera-pitch [pitch] Starting camera view pitch
-      -o [path], --output [path]         Prefix of output file name(s) (default
-                                        output/output)
-      -n, --nobitmap                    Do not output bitmap features - only the
-                                        exr
-      -i, --interactive                 Open in interactive mode - will only
-                                        render a single frame if not set
-
-
+Options:
+  --help                         Print help messages
+  -t [ --threads-per-block ] arg Number of threads per block in 2D CUDA
+                                 scheduling grid.
+  --size arg                     Size of the screen in pixels
+  -s [ --samples ] arg           Number of samples per pixel
+  --device arg                   Which CUDA device to use for rendering
+  -d [ --denoising ]             Use denoising neural network.
+  -i [ --interactive ]           Interactive mode - will render single frame
+                                 only if not set.
+  --nobitmap                     Don't output bitmaps for each channel
+  -o [ --output ] arg            Prefix of output file/path
+  -x [ --camera-x ] arg          Starting camera position x
+  -y [ --camera-y ] arg          Starting camera position y
+  -z [ --camera-z ] arg          Starting camera position z
+  -c [ --camera-yaw ] arg        Starting camera view yaw
+  -p [ --camera-pitch ] arg      Starting camera view pitch
 ```
 
 ## Using the Rendered Features
@@ -71,7 +66,7 @@ cuda-pathtrace outputs a multilayered OpenEXR file containing all of the necessa
 
 ### In Python
 
-To load the rendered image and features from the EXR file, the python code in `denoising/load_data.py` can be used via:
+To load the rendered image and features from the EXR file, the python code in `denoise_cnn/load_data.py` can be used via:
 
 ```python
 from load_data import load_exr_data
@@ -87,7 +82,9 @@ You will need to install the [OpenEXR python bindings](http://www.excamera.com/s
 * glm - Mathmatics functions for Camera class
 * GLFW
 * OpenGL
+* Pytorch
+* Python
+* Boost
 * [tinyexr](https://github.com/syoyo/tinyexr) - Saving OpenEXR files
 * [stbimage](https://github.com/nothings/stb) - Saving bitmaps
-* [args](https://github.com/Taywee/args) - Parsing command line arguments
 * Cornell box scene from http://www.kevinbeason.com/smallpt/
