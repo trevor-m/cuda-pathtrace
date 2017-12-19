@@ -30,7 +30,7 @@ int main(int argc, const char** argv) {
   //get arguments
   po::options_description desc("Options"); 
   desc.add_options() 
-    ("help", "Print help messages") 
+    ("help,h", "Print help messages") 
     ("threads-per-block,t", po::value<int>(&threadsPerBlock), "Number of threads per block in 2D CUDA scheduling grid.") 
     ("size", po::value<int>(&size), "Size of the screen in pixels")
     ("samples,s", po::value<int>(&samplesPerPixel), "Number of samples per pixel")
@@ -140,7 +140,7 @@ int main(int argc, const char** argv) {
 
   if (interactive) {
     // interactive (realtime) mode
-    Window window(width, height, &camera);
+    Window window(width, height, &camera, &denoising);
     GLPixelBuffer denoisedBuffer(width, height);
 
     while(!window.ShouldClose()) {

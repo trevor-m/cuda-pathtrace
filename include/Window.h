@@ -17,6 +17,8 @@ class Window {
 private:
   GLFWwindow* window;
   Camera* camera;
+  // pointer to denoiser toggle
+  bool* denoising;
 
   // quad to render texture to screen with
   GLuint quadVAO, quadVBO;
@@ -31,10 +33,11 @@ private:
 public:
   int width, height;
 
-  Window(int width, int height, Camera* camera) {
+  Window(int width, int height, Camera* camera, bool* denoising) {
     this->width = width;
     this->height = height;
     this->camera = camera;
+    this->denoising = denoising;
 
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
@@ -160,6 +163,10 @@ public:
         w->keys[key] = true;
       else if (action == GLFW_RELEASE)
         w->keys[key] = false;
+      
+      // toggles
+      if (action == GLFW_PRESS && key == GLFW_KEY_TAB)
+        *w->denoising = !(*w->denoising);
     }
   }
 
