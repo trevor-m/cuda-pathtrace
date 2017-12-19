@@ -19,17 +19,20 @@ def load_exr_data(filename, preprocess=False, concat=False, target=False):
 
   # preprocess
   if preprocess:
-    #color = np.clip(color, 0, 1)
-    depth /= np.max(depth)
-    depth_var /= np.max(depth_var)
-    albedo_var /= np.max(albedo_var)
-    color_var /= np.max(color_var)
-    normal_var /= np.max(normal_var)
+    epsilon = 0.00316
+    # albedo divide
+    if not target:
+      color /= (epsilon + albedo)
+    depth /= (epsilon + np.max(depth))
+    depth_var /= (epsilon + np.max(depth_var))
+    albedo_var /= (epsilon + np.max(albedo_var))
+    color_var /= (epsilon + np.max(color_var))
+    normal_var /= (epsilon + np.max(normal_var))
 
   if not target:
     data = [color, normal, albedo, depth, color_var, normal_var, albedo_var, depth_var]
   else:
-    data = [color]
+    data = [np.clip(color, 0, 1)]
   if concat:
     data = np.concatenate(data, axis=2)
     data = np.swapaxes(data, 0, 2)
@@ -111,8 +114,8 @@ def get_patches(filename, gt_filename, patch_size=64, num_patches=200, preproces
   return patches, patches_gt
 
 def get_score(patch):
-  # score is total color variance + total normal variance
-    return np.sum(patch[10:, :, :]) + np.sum(patch[11, :, :])
+  # score is color channel variance + normal channel variance
+    return np.var(patch[:3, :, :]) + np.var(patch[3:6, :, :])
 
 if __name__ == "__main__":
   print("Testing load_exr_data")
