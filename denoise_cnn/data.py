@@ -8,19 +8,20 @@ def get_dataset(patches=True):
 
     for i in range(33):
         if patches:
-            train_patches, gt_patches = get_patches("../data/{}_train.exr".format(i), "../data/{}_gt.exr".format(i), patch_size=256, num_patches=10, preprocess=True)
+            train_patches, gt_patches = get_patches("../data/{}_train.exr".format(i), "../data/{}_gt.exr".format(i), patch_size=256, num_patches=16, preprocess=True)
             train_inputs.extend([torch.Tensor(x) for x in train_patches])
             train_targets.extend([torch.Tensor(x) for x in gt_patches])
         else:
-            train_inputs.extend(torch.Tensor(
+            train_inputs.append(torch.Tensor(
                 load_exr_data("../data/{}_train.exr".format(i), preprocess=True, concat=True))
             )
-            train_targets.extend(torch.Tensor(
+            train_targets.append(torch.Tensor(
                 load_exr_data("../data/{}_gt.exr".format(i), preprocess=True, concat=True, target=True))
             )
-
+    
     train_inputs = torch.stack(train_inputs, 0)
     train_targets = torch.stack(train_targets, 0)
+    print train_inputs.shape, train_targets.shape
     train_dataset = TensorDataset(train_inputs, train_targets)
 
     test_inputs = torch.stack([torch.Tensor(load_exr_data("../data/0_train.exr", preprocess=True, concat=True))], 0)
